@@ -15,10 +15,12 @@ Claude Code에 로컬 모델을 연결해 쓸 때, 품질 개선 키트의 적�
 
 ## 요구 환경
 
-- macOS 또는 Linux, Python 3.10 이상.
+- Windows 네이티브(PowerShell), macOS 또는 Linux. Python 3.10 이상.
+- Windows는 native `claude.exe` 사용. npm의 `.cmd` 실행 래퍼는 지원하지 않습니다.
 - 실제 모델 실행 시에만 Claude Code 필요.
 - 로컬 모델을 제공하는 **Anthropic 호환 API 또는 로컬 변환 프록시**.
-- API 인증은 기존 환경변수로 제공. 이 저장소에 토큰/비밀을 넣지 마세요.
+- 격리 실행은 API 인증을 환경변수로 제공하고, --inherit-cli-config 모드는 기존 CLI 인증을 유지합니다.
+  이 저장소에 토큰/비밀을 넣지 마세요.
 
 OpenAI 호환 `/v1/chat/completions` 주소만으로 Claude Code가 직접 연결되는 것은 아닙니다.
 이미 Claude Code에서 로컬 모델 호출이 되는 환경을 전제로 합니다.
@@ -30,13 +32,53 @@ OpenAI 호환 `/v1/chat/completions` 주소만으로 Claude Code가 직접 연�
 저장소 루트에서:
 
 ```bash
-./scripts/run_tests.sh
+python scripts/run_tests.py
 ```
 
 `test_benchmark.py`는 출발점 동일성, 초기 코드 거부/정답 통과, 테스트 변경 감지,
 미실행 결과를 성공률로 만들지 않기, 로컬 주소/실행 동의 검사를 확인합니다.
 `quality-kit/test_kit.py`는 훅 프로토콜, 타임아웃, 쓰기 확인과 실행기 동작을 확인합니다.
 실제 모델 호출/다운로드/패키지 설치는 하지 않습니다.
+
+## Windows 네이티브 + 현재 Claude 모델 매핑 유지
+
+WSL이나 Bash 없이 PowerShell에서 실행할 수 있도록 호환 코드를 추가했습니다.
+Claude Code 자체도 최신 버전은 Git Bash가 없으면 PowerShell 도구를 사용합니다.
+공식 설치/셸 지원: https://code.claude.com/docs/en/setup
+
+```powershell
+# 저장소 루트에서 자체 검사: 모델은 호출하지 않음
+py -3 scripts/run_tests.py
+
+# 처음 한 번만 작업 생성
+py -3 bench.py --runs .\runs\windows-pilot prepare --repeats 3
+
+# 현재 Claude 설정의 모델 매핑을 유지한 dry run
+py -3 bench.py --runs .\runs\windows-pilot run --inherit-cli-config
+
+# 위 명령 확인 후 실제 모델 호출
+py -3 bench.py --runs .\runs\windows-pilot run --inherit-cli-config --execute
+
+# 완료된 코드 독립 채점 및 결과 생성
+py -3 bench.py --runs .\runs\windows-pilot evaluate
+py -3 bench.py --runs .\runs\windows-pilot report
+```
+
+`--inherit-cli-config`는 모델/API 주소를 새로 지정하지 않고 기존 CLI 설정·환경변수를
+유지합니다. 필요하면 기존 별칭을 `--model`로 명시할 수 있습니다.
+다른 에이전트를 만드는 것이 아니라 기존 `claude -p`를 실행합니다.
+기존 매핑이 클라우드라면 그대로 클라우드를 호출할 수 있으므로 실행 전에 확인하세요.
+기존 MCP와 사용자 설정도 유지되므로 완전 격리 비교가 아닙니다.
+두 조건의 지침/검증 외 환경은 동일하게 유지하고, 기존 훅과의 중복도 점검하세요.
+상위 지침 탐지 시 깨끗한 경로를 쓰거나 --allow-ancestor-instructions로 명시 허용하세요.
+대화형 세션의 --baseline과 달리 벤치마크 baseline은 훅을 끄므로 사용자 훅도 제외됩니다.
+
+한글 경로/JSON은 UTF-8로 처리합니다. Windows 잠금은 msvcrt, 프로세스 트리 종료는
+Windows taskkill, 훅은 PowerShell 실행 명령을 사용합니다.
+.sh 검사는 Bash가 있을 때만 수행하며 없으면 NOT RUN으로 명시합니다.
+현재 macOS에서 전체 자체 검사를 수행했으며, Windows 실제 머신/로컬 모델 E2E 결과는
+아직 없습니다. examples/github-actions-test.yml의 windows-latest 작업으로 검증할 수 있습니다.
+이는 CI 템플릿이며 저장소에서 실제 실행된 CI 성공을 뜻하지 않습니다.
 
 ## 2. 비교용 작업 생성
 
@@ -105,10 +147,11 @@ python3 bench.py --runs ./runs/pilot run \
   발견되면 기본적으로 실제 실행을 거부합니다. 깨끗한 경로를 사용하거나, 영향을 감수하는
   실험에 한해 --allow-ancestor-instructions로 명시적으로 허용하세요.
 - 두 조건 모두 acceptEdits로 폐기 가능한 작업 폴더의 편집을 허용하며,
-  python3/현재 Python 실행 파일의 unittest 명령만 Bash 자동 승인 목록에 추가합니다.
+  python/python3/현재 Python 실행 파일의 unittest 명령을 Bash 및 PowerShell에 제한적으로 허용합니다.
   전체 권한 우회 플래그는 사용하지 않습니다. 그 외 명령은 거부될 수 있으므로 로그를 확인하세요.
 - 조직 관리 정책과 상위 지침을 완전히 격리하는 OS 샌드박스는 아닙니다.
-- API 키/로컬 모델 연결에 필요한 설정은 **환경변수**로 제공해야 함.
+- 아래 명시적 모델/주소 격리 모드는 API 키/연결 정보를 환경변수로 제공.
+  --inherit-cli-config 모드는 기존 CLI 매핑/인증을 유지함.
 - 시스템 프롬프트를 실행 도중 변경하거나 동적 도구 차단을 하지 않음.
 - baseline/full 구성 파일의 훅 차이는 의도된 실험 조건임.
 - 외부 최종 채점 시간은 에이전트 실행 시간에 포함하지 않음; 작업 중 훅 시간은 포함.

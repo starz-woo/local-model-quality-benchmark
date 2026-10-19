@@ -27,7 +27,7 @@ class QualityTests(unittest.TestCase):
         self.write_config()
 
     def write_config(self):
-        (self.root / 'config.json').write_text(json.dumps(self.config))
+        (self.root / 'config.json').write_text(json.dumps(self.config), encoding='utf-8', newline='\n')
 
     def call(self, name, **kwargs):
         out = io.StringIO()
@@ -38,7 +38,7 @@ class QualityTests(unittest.TestCase):
 
     def edit(self, suffix, content, tool='Edit', expected=None):
         path = self.root / ('file with spaces' + suffix)
-        path.write_text(content)
+        path.write_text(content, encoding='utf-8', newline='\n')
         data = {'file_path': str(path)}
         if expected is not None:
             data['content'] = expected
@@ -79,7 +79,7 @@ class QualityTests(unittest.TestCase):
         self.write_config()
         self.edit('.txt', 'hello')
         self.assertEqual(self.call('Stop'), {})
-        state = json.loads(hook.state_path(self.root, {'session_id': 'test'}).read_text())
+        state = json.loads(hook.state_path(self.root, {'session_id': 'test'}).read_text(encoding='utf-8'))
         self.assertFalse(state['dirty'])
 
     def test_timeout(self):
@@ -107,13 +107,15 @@ class QualityTests(unittest.TestCase):
 
     def test_hook_command_protocol(self):
         kit = Path(__file__).resolve().parent
-        settings = json.loads((kit / 'settings.json').read_text())
+        from runtime_support import hook_settings, utf8_environment, IS_WINDOWS
+        settings = hook_settings(kit)
         command = settings['hooks']['PostToolUse'][0]['hooks'][0]['command']
-        env = dict(os.environ, LOCAL_QUALITY_KIT=str(kit), LOCAL_QUALITY_PYTHON=sys.executable)
+        env = dict(utf8_environment(), LOCAL_QUALITY_KIT=str(kit), LOCAL_QUALITY_PYTHON=sys.executable)
         path = self.root / 'broken.json'
-        path.write_text('{')
+        path.write_text('{', encoding='utf-8', newline='\n')
         event = {'hook_event_name': 'PostToolUse', 'session_id': 'protocol', 'tool_name': 'Edit', 'tool_input': {'file_path': str(path)}}
-        result = subprocess.run(command, shell=True, env=env, input=json.dumps(event), capture_output=True, text=True)
+        invocation = ['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', command] if IS_WINDOWS else ['sh', '-c', command]
+        result = subprocess.run(invocation, env=env, input=json.dumps(event), capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(result.stdout)
         self.assertEqual(data['hookSpecificOutput']['hookEventName'], 'PostToolUse')
@@ -121,10 +123,12 @@ class QualityTests(unittest.TestCase):
 
     def test_launcher_adds_settings_and_preserves_environment(self):
         import launch
-        with patch.object(sys, 'argv', ['launch.py', '--model', 'my-local-model']), patch.object(launch.shutil, 'which', return_value='/fake/claude'), patch.object(launch.os, 'execvpe') as execute:
+        with patch.object(sys, 'argv', ['launch.py', '--model', 'my-local-model']), patch.object(launch, 'find_claude', return_value='/fake/claude', create=True), patch('shutil.which', return_value='/fake/claude'), patch('subprocess.call', return_value=0) as execute:
             launch.main()
-        executable, argv, env = execute.call_args.args
-        self.assertEqual(executable, '/fake/claude')
+        self.assertTrue(execute.called, 'launcher must use a Windows-compatible subprocess rather than execvpe')
+        argv = execute.call_args.args[0]
+        env = execute.call_args.kwargs['env']
+        self.assertEqual(argv[0], '/fake/claude')
         self.assertIn('--settings', argv)
         self.assertIn('--append-system-prompt', argv)
         self.assertEqual(argv[-2:], ['--model', 'my-local-model'])
@@ -132,9 +136,10 @@ class QualityTests(unittest.TestCase):
 
     def test_launcher_baseline(self):
         import launch
-        with patch.object(sys, 'argv', ['launch.py', '--baseline']), patch.object(launch.shutil, 'which', return_value='/fake/claude'), patch.object(launch.os, 'execvpe') as execute:
+        with patch.object(sys, 'argv', ['launch.py', '--baseline']), patch.object(launch, 'find_claude', return_value='/fake/claude', create=True), patch('shutil.which', return_value='/fake/claude'), patch('subprocess.call', return_value=0) as execute:
             launch.main()
-        self.assertEqual(execute.call_args.args[1], ['/fake/claude'])
+        self.assertTrue(execute.called)
+        self.assertEqual(execute.call_args.args[0], ['/fake/claude'])
 
     def test_compact_preserves_ends(self):
         output = hook.compact('START' + 'x' * 10000 + 'END')

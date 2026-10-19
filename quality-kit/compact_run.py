@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from runtime_support import process_options, stop_process_tree, utf8_environment, configure_stdio
 
 
 def main():
@@ -21,22 +22,14 @@ def main():
     fd, name = tempfile.mkstemp(prefix='local-quality-log-', suffix='.txt')
     with os.fdopen(fd, 'wb') as output:
         try:
-            process = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT, start_new_session=(os.name == 'posix'))
+            process = subprocess.Popen(command, stdout=output, stderr=subprocess.STDOUT, env=utf8_environment(), **process_options())
         except OSError as exc:
             print(str(exc), file=sys.stderr)
             return 127
         try:
             code = process.wait(timeout=args.timeout)
         except subprocess.TimeoutExpired:
-            if os.name == 'posix':
-                import signal
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-            else:
-                process.kill()
-            process.wait()
+            stop_process_tree(process)
             code = 124
     path = Path(name)
     size = path.stat().st_size
@@ -53,4 +46,5 @@ def main():
 
 
 if __name__ == '__main__':
+    configure_stdio()
     sys.exit(main())
