@@ -1,0 +1,38 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$LOCAL_QUALITY_PYTHON\" \"$LOCAL_QUALITY_KIT/hook.py\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$LOCAL_QUALITY_PYTHON\" \"$LOCAL_QUALITY_KIT/hook.py\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$LOCAL_QUALITY_PYTHON\" \"$LOCAL_QUALITY_KIT/hook.py\"",
+            "timeout": 550
+          }
+        ]
+      }
+    ]
+  }
+}
