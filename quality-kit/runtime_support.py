@@ -19,9 +19,8 @@ def file_lock(path, timeout=600):
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
     with os.fdopen(fd, 'r+b') as stream:
-        if os.fstat(stream.fileno()).st_size == 0:
-            stream.write(b'\0')
-            stream.flush()
+        # Windows byte-range locks may extend beyond EOF. Do not initialize a
+        # sentinel before locking: another first-time caller may already own it.
         started = time.monotonic()
         acquired = False
         try:
@@ -107,6 +106,9 @@ def hook_settings(kit, python_executable=None, windows=None):
     """Generate from the template so timeout/matcher changes are preserved."""
     kit = Path(kit)
     config = json.loads((kit / 'settings.json').read_text(encoding='utf-8'))
+    # Keep the treatment explicit even when inherited user settings disable hooks.
+    # Managed organization policy still takes precedence and is never bypassed.
+    config['disableAllHooks'] = False
     windows = IS_WINDOWS if windows is None else windows
     executable = python_executable or sys.executable
     for groups in config['hooks'].values():

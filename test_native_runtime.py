@@ -69,6 +69,10 @@ for _ in range(5):
             self.assertNotIn('--strict-mcp-config', dry['command'])
             self.assertIsNone(dry['isolated_config_dir'])
             self.assertEqual(dry['model_connection'], 'inherited')
+            full_settings = json.loads((Path(directory) / 'dedupe-full-r1' / 'settings.json').read_text(encoding='utf-8'))
+            self.assertIs(full_settings.get('disableAllHooks'), False, 'full treatment must explicitly enable hooks')
+            baseline_settings = json.loads((Path(directory) / 'dedupe-baseline-r1' / 'settings.json').read_text(encoding='utf-8'))
+            self.assertIs(baseline_settings.get('disableAllHooks'), True)
 
 
     def test_timeout_stops_child_processes(self):
@@ -95,6 +99,17 @@ for _ in range(5):
             finally:
                 if process.poll() is None:
                     runtime.stop_process_tree(process)
+
+
+    def test_lock_does_not_write_before_acquiring(self):
+        spec = importlib.util.spec_from_file_location('runtime_lock_test', ROOT / 'quality-kit' / 'runtime_support.py')
+        assert spec is not None and spec.loader is not None
+        runtime = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runtime)
+        with tempfile.TemporaryDirectory() as directory:
+            lock = Path(directory) / 'empty.lock'
+            with runtime.file_lock(lock):
+                self.assertEqual(lock.stat().st_size, 0, 'lock files must not require a pre-lock sentinel write')
 
 
 if __name__ == '__main__':
