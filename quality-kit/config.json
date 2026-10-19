@@ -1,0 +1,8 @@
+{
+  "exploration_reminder_after": 6,
+  "verify_timeout_seconds": 20,
+  "test_timeout_seconds": 90,
+  "max_blocked_stops": 2,
+  "verify_by_suffix": {},
+  "test_commands": []
+}

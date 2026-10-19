@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.test-tmp/
+runs/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+.local-quality-task.md
+config.json.before-test-setup
