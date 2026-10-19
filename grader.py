@@ -174,7 +174,7 @@ def main():
         output = {'passed': result.wasSuccessful() and result.testsRun == expected and not result.skipped, 'tests_run': result.testsRun, 'skipped': len(result.skipped), 'test_methods': expected, 'failures': len(result.failures), 'errors': len(result.errors), 'detail': captured.getvalue()[-20000:]}
     except Exception as exc:
         output = {'passed': False, 'tests_run': 0, 'test_methods': expected, 'failures': 0, 'errors': 1, 'detail': repr(exc)}
-    print(json.dumps(output, ensure_ascii=False))
+    print(json.dumps(output, ensure_ascii=True))
 
 
 if __name__ == '__main__':

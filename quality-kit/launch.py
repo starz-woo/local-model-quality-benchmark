@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Launch Claude with opt-in project-local quality guidance and hooks."""
+"""Launch the existing Claude CLI mapping with opt-in portable quality hooks."""
 import argparse
 import json
-import os
 from pathlib import Path
-import shutil
+import subprocess
 import sys
+import tempfile
+
+from runtime_support import find_claude, hook_settings, workflow_prompt, utf8_environment, configure_stdio
 
 KIT = Path(__file__).resolve().parent
 
@@ -15,21 +17,25 @@ def main():
     parser.add_argument('--baseline', action='store_true', help='Do not add this kit; existing Claude settings still apply')
     parser.add_argument('--check', action='store_true', help='Check prerequisites without calling a model')
     args, extra = parser.parse_known_args()
-    claude = shutil.which('claude')
+    claude = find_claude()
     if not claude:
-        parser.error('claude executable not found')
+        parser.error('Native Claude Code executable not found')
     if args.check:
-        config = json.loads((KIT / 'config.json').read_text())
+        config = json.loads((KIT / 'config.json').read_text(encoding='utf-8'))
         print(json.dumps({'claude': claude, 'project': str(Path.cwd()), 'kit': str(KIT), 'config': config}, ensure_ascii=False, indent=2))
-        return
-    env = os.environ.copy()
+        return 0
+    env = utf8_environment()
     env['LOCAL_QUALITY_KIT'] = str(KIT)
     env['LOCAL_QUALITY_PYTHON'] = sys.executable
-    command = [claude]
-    if not args.baseline:
-        command += ['--settings', str(KIT / 'settings.json'), '--append-system-prompt', (KIT / 'PROMPT.md').read_text()]
-    os.execvpe(claude, command + extra, env)
+    if args.baseline:
+        return subprocess.call([claude] + extra, env=env)
+    with tempfile.TemporaryDirectory(prefix='local-quality-launch-') as directory:
+        settings = Path(directory) / 'settings.json'
+        settings.write_text(json.dumps(hook_settings(KIT), ensure_ascii=False), encoding='utf-8', newline='\n')
+        command = [claude, '--settings', str(settings), '--append-system-prompt', workflow_prompt(KIT)]
+        return subprocess.call(command + extra, env=env)
 
 
 if __name__ == '__main__':
-    main()
+    configure_stdio()
+    sys.exit(main())

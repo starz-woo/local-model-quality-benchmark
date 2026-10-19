@@ -3,7 +3,6 @@ import csv
 import difflib
 import hashlib
 import json
-from pathlib import Path
 import statistics
 
 from tasks import TASKS
@@ -28,20 +27,20 @@ RUBRIC = '''# 블라인드 품질 평가
 
 
 def report(runs):
-    manifest = json.loads((runs / 'manifest.json').read_text())
+    manifest = json.loads((runs / 'manifest.json').read_text(encoding='utf-8'))
     rows = []
     review = runs / 'blind-review'
     review.mkdir(exist_ok=True)
-    (review / 'rubric.md').write_text(RUBRIC, encoding='utf-8')
+    (review / 'rubric.md').write_text(RUBRIC, encoding='utf-8', newline='\n')
     mapping = {}
     review_rows = []
     for run_id in manifest['schedule']:
         directory = runs / run_id
-        meta = json.loads((directory / 'meta.json').read_text())
+        meta = json.loads((directory / 'meta.json').read_text(encoding='utf-8'))
         result_file = directory / 'evaluation.json'
-        result = json.loads(result_file.read_text()) if result_file.exists() else None
+        result = json.loads(result_file.read_text(encoding='utf-8')) if result_file.exists() else None
         execution_file = directory / 'execution.json'
-        execution = json.loads(execution_file.read_text()) if execution_file.exists() else None
+        execution = json.loads(execution_file.read_text(encoding='utf-8')) if execution_file.exists() else None
         from integrity import current
         evaluated = result is not None and current(directory, result)
         valid_exit = execution is not None and execution.get('exit_code') == 0 and not execution.get('timed_out') and not execution.get('api_error', False)
@@ -53,15 +52,15 @@ def report(runs):
         mapping[blind_id] = run_id
         bundle = review / blind_id
         bundle.mkdir(exist_ok=True)
-        (bundle / 'task.md').write_text((directory / 'workspace' / 'TASK.md').read_text(), encoding='utf-8')
+        (bundle / 'task.md').write_text((directory / 'workspace' / 'TASK.md').read_text(encoding='utf-8'), encoding='utf-8', newline='\n')
         candidate = directory / 'workspace' / 'solution.py'
-        content = candidate.read_text(errors='replace') if candidate.exists() else '[missing solution.py]'
-        (bundle / 'solution.py').write_text(content, encoding='utf-8')
+        content = candidate.read_text(errors='replace', encoding='utf-8') if candidate.exists() else '[missing solution.py]'
+        (bundle / 'solution.py').write_text(content, encoding='utf-8', newline='\n')
         diff = ''.join(difflib.unified_diff(TASKS[meta['task_id']]['starter'].splitlines(keepends=True), content.splitlines(keepends=True), fromfile='before/solution.py', tofile='after/solution.py'))
-        (bundle / 'change.diff').write_text(diff, encoding='utf-8')
-        (bundle / 'response.txt').write_text(execution.get('response', '[No valid final response captured]'), encoding='utf-8')
+        (bundle / 'change.diff').write_text(diff, encoding='utf-8', newline='\n')
+        (bundle / 'response.txt').write_text(execution.get('response', '[No valid final response captured]'), encoding='utf-8', newline='\n')
         evidence = {'exit_code': execution.get('exit_code'), 'timed_out': execution.get('timed_out'), 'independent_grader': result.get('grader') if evaluated else {'status': 'missing_or_stale_evaluation'}, 'protected_changes': result.get('protected_changes') if result else None, 'note': 'Native JSON final output is not a full tool transcript. Claims about prior checks may remain unverified.'}
-        (bundle / 'evidence.txt').write_text(json.dumps(evidence, ensure_ascii=False, indent=2), encoding='utf-8')
+        (bundle / 'evidence.txt').write_text(json.dumps(evidence, ensure_ascii=False, indent=2), encoding='utf-8', newline='\n')
         review_rows.append({'blind_id': blind_id, 'requirements_0_2': '', 'scope_0_2': '', 'maintainability_0_2': '', 'report_accuracy_0_2': '', 'test_quality': 'N/A', 'evidence': ''})
     summary = {'conditions': {}, 'paired': {'complete_pairs': 0, 'full_only_success': 0, 'baseline_only_success': 0, 'both_success': 0, 'both_fail': 0}, 'note': 'Descriptive pilot results, not a statistical significance claim. No model attempts means null success rate. Pending evaluations are not treated as completed results.'}
     for condition in ('baseline', 'full'):
@@ -80,7 +79,7 @@ def report(runs):
         summary['paired']['complete_pairs'] += 1
         key = 'both_success' if a['success'] and b['success'] else 'baseline_only_success' if a['success'] else 'full_only_success' if b['success'] else 'both_fail'
         summary['paired'][key] += 1
-    (runs / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2) + '\n')
+    (runs / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2) + '\n', encoding='utf-8', newline='\n')
     with (runs / 'results.csv').open('w', newline='', encoding='utf-8') as stream:
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]) if rows else ['run_id'])
         writer.writeheader()
@@ -97,11 +96,11 @@ def report(runs):
         writer = csv.DictWriter(stream, fieldnames=['blind_id', 'requirements_0_2', 'scope_0_2', 'maintainability_0_2', 'report_accuracy_0_2', 'test_quality', 'evidence'])
         writer.writeheader()
         writer.writerows(merged)
-    (runs / 'review-key.json').write_text(json.dumps(mapping, indent=2) + '\n')
+    (runs / 'review-key.json').write_text(json.dumps(mapping, indent=2) + '\n', encoding='utf-8', newline='\n')
     text = '# Benchmark summary\n\n' + summary['note'] + '\n\n'
     for condition, value in summary['conditions'].items():
         text += f'## {condition}\n\n```json\n' + json.dumps(value, indent=2) + '\n```\n\n'
     text += '## Paired outcomes\n\n```json\n' + json.dumps(summary['paired'], indent=2) + '\n```\n'
-    (runs / 'summary.md').write_text(text, encoding='utf-8')
+    (runs / 'summary.md').write_text(text, encoding='utf-8', newline='\n')
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return summary

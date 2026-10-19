@@ -20,7 +20,7 @@ class BenchmarkTests(unittest.TestCase):
             self.assertEqual((a / 'TASK.md').read_bytes(), (b / 'TASK.md').read_bytes())
             self.assertFalse((a / 'grader.py').exists())
             self.assertFalse((a / 'reference.py').exists())
-            manifest = json.loads((runs / 'manifest.json').read_text())
+            manifest = json.loads((runs / 'manifest.json').read_text(encoding='utf-8'))
             self.assertTrue(manifest['schedule'])
 
 
@@ -30,7 +30,7 @@ class BenchmarkTests(unittest.TestCase):
             for task_id, task in TASKS.items():
                 for kind in ('starter', 'reference'):
                     file = Path(directory) / (task_id + '-' + kind + '.py')
-                    file.write_text(task[kind], encoding='utf-8')
+                    file.write_text(task[kind], encoding='utf-8', newline='\n')
                     result = subprocess.run([sys.executable, '-I', str(ROOT / 'grader.py'), task_id, str(file)], capture_output=True, text=True)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     data = json.loads(result.stdout)
@@ -44,16 +44,16 @@ class BenchmarkTests(unittest.TestCase):
             command = [sys.executable, str(ROOT / 'bench.py'), '--runs', directory]
             subprocess.run(command + ['prepare', '--repeats', '1'], check=True, capture_output=True)
             run = Path(directory) / 'dedupe-baseline-r1'
-            (run / 'workspace' / 'solution.py').write_text(TASKS['dedupe']['reference'])
+            (run / 'workspace' / 'solution.py').write_text(TASKS['dedupe']['reference'], encoding='utf-8', newline='\n')
             result = subprocess.run(command + ['evaluate', '--id', run.name], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            grade = json.loads((run / 'evaluation.json').read_text())
+            grade = json.loads((run / 'evaluation.json').read_text(encoding='utf-8'))
             self.assertTrue(grade['functional_pass'])
             self.assertTrue(grade['success'])
             self.assertFalse(grade['measured_agent_run'])
-            (run / 'workspace' / 'tests' / 'test_public.py').write_text('# weakened')
+            (run / 'workspace' / 'tests' / 'test_public.py').write_text('# weakened', encoding='utf-8', newline='\n')
             subprocess.run(command + ['evaluate', '--id', run.name], check=True, capture_output=True)
-            grade = json.loads((run / 'evaluation.json').read_text())
+            grade = json.loads((run / 'evaluation.json').read_text(encoding='utf-8'))
             self.assertTrue(grade['functional_pass'])
             self.assertFalse(grade['success'])
             self.assertIn('tests/test_public.py', grade['protected_changes'])
@@ -66,7 +66,7 @@ class BenchmarkTests(unittest.TestCase):
             # Report without running Claude must not invent a success rate.
             result = subprocess.run(command + ['report'], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
-            summary = json.loads((Path(directory) / 'summary.json').read_text())
+            summary = json.loads((Path(directory) / 'summary.json').read_text(encoding='utf-8'))
             for condition in ('baseline', 'full'):
                 self.assertEqual(summary['conditions'][condition]['attempted'], 0)
                 self.assertIsNone(summary['conditions'][condition]['success_rate'])
@@ -87,7 +87,7 @@ class BenchmarkTests(unittest.TestCase):
             self.assertIn('--permission-mode', dry['command'])
             self.assertIn('acceptEdits', dry['command'])
             self.assertIn('--allowedTools', dry['command'])
-            self.assertTrue(dry['isolated_config_dir'].endswith('/claude-config'))
+            self.assertEqual(Path(dry['isolated_config_dir']).name, 'claude-config')
             self.assertFalse((Path(directory) / 'dedupe-baseline-r1' / 'execution.json').exists())
             result = subprocess.run(command + ['run', '--model', 'local-test', '--base-url', 'https://api.anthropic.com'], capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
@@ -97,7 +97,7 @@ class BenchmarkTests(unittest.TestCase):
     def test_skipped_candidate_is_not_a_pass(self):
         with tempfile.TemporaryDirectory() as directory:
             candidate = Path(directory) / 'skip.py'
-            candidate.write_text('import unittest\ndef stable_unique(items):\n    raise unittest.SkipTest("not implemented")\n')
+            candidate.write_text('import unittest\ndef stable_unique(items):\n    raise unittest.SkipTest("not implemented")\n', encoding='utf-8', newline='\n')
             result = subprocess.run([sys.executable, '-I', str(ROOT / 'grader.py'), 'dedupe', str(candidate)], capture_output=True, text=True, check=True)
             grade = json.loads(result.stdout)
             self.assertFalse(grade['passed'])
@@ -111,22 +111,22 @@ class BenchmarkTests(unittest.TestCase):
             subprocess.run(command + ['prepare', '--repeats', '1'], check=True, capture_output=True)
             run = Path(directory) / 'dedupe-baseline-r1'
             candidate = run / 'workspace' / 'solution.py'
-            candidate.write_text(TASKS['dedupe']['reference'])
+            candidate.write_text(TASKS['dedupe']['reference'], encoding='utf-8', newline='\n')
             # Unit-test metadata fixture, not a real or claimed model invocation.
             execution = run / 'execution.json'
-            execution.write_text(json.dumps({'exit_code': 0, 'seconds': 1, 'mode': 'unit_test_fixture'}))
+            execution.write_text(json.dumps({'exit_code': 0, 'seconds': 1, 'mode': 'unit_test_fixture'}), encoding='utf-8', newline='\n')
             subprocess.run(command + ['evaluate', '--id', run.name], check=True, capture_output=True)
             subprocess.run(command + ['report'], check=True, capture_output=True)
-            summary = json.loads((Path(directory) / 'summary.json').read_text())
+            summary = json.loads((Path(directory) / 'summary.json').read_text(encoding='utf-8'))
             self.assertEqual(summary['conditions']['baseline']['successes'], 1)
-            candidate.write_text(TASKS['dedupe']['starter'])
+            candidate.write_text(TASKS['dedupe']['starter'], encoding='utf-8', newline='\n')
             subprocess.run(command + ['report'], check=True, capture_output=True)
-            summary = json.loads((Path(directory) / 'summary.json').read_text())
+            summary = json.loads((Path(directory) / 'summary.json').read_text(encoding='utf-8'))
             self.assertEqual(summary['conditions']['baseline']['pending_evaluations'], 1)
             subprocess.run(command + ['evaluate', '--id', run.name], check=True, capture_output=True)
-            execution.write_text(json.dumps({'exit_code': 0, 'seconds': 2, 'mode': 'unit_test_fixture'}))
+            execution.write_text(json.dumps({'exit_code': 0, 'seconds': 2, 'mode': 'unit_test_fixture'}), encoding='utf-8', newline='\n')
             subprocess.run(command + ['report'], check=True, capture_output=True)
-            summary = json.loads((Path(directory) / 'summary.json').read_text())
+            summary = json.loads((Path(directory) / 'summary.json').read_text(encoding='utf-8'))
             self.assertEqual(summary['conditions']['baseline']['pending_evaluations'], 1)
 
 
@@ -136,10 +136,10 @@ class BenchmarkTests(unittest.TestCase):
             command = [sys.executable, str(ROOT / 'bench.py'), '--runs', directory]
             subprocess.run(command + ['prepare', '--repeats', '1'], check=True, capture_output=True)
             run = Path(directory) / 'dedupe-baseline-r1'
-            (run / 'workspace' / 'solution.py').write_text(TASKS['dedupe']['reference'])
-            (run / 'workspace' / 'extra.py').write_text('x = 1')
+            (run / 'workspace' / 'solution.py').write_text(TASKS['dedupe']['reference'], encoding='utf-8', newline='\n')
+            (run / 'workspace' / 'extra.py').write_text('x = 1', encoding='utf-8', newline='\n')
             subprocess.run(command + ['evaluate', '--id', run.name], check=True, capture_output=True)
-            grade = json.loads((run / 'evaluation.json').read_text())
+            grade = json.loads((run / 'evaluation.json').read_text(encoding='utf-8'))
             self.assertFalse(grade['success'])
             self.assertIn('extra.py', grade['protected_changes'])
 
@@ -152,7 +152,7 @@ class BenchmarkTests(unittest.TestCase):
             subprocess.run(command + ['report'], check=True, capture_output=True)
             root = Path(directory)
             fixture = {'exit_code': 0, 'seconds': 1, 'mode': 'unit_test_fixture'}
-            (root / 'dedupe-baseline-r1' / 'execution.json').write_text(json.dumps(fixture))
+            (root / 'dedupe-baseline-r1' / 'execution.json').write_text(json.dumps(fixture), encoding='utf-8', newline='\n')
             subprocess.run(command + ['report'], check=True, capture_output=True)
             score_path = root / 'blind-review' / 'scores.template.csv'
             with score_path.open() as stream:
@@ -163,7 +163,7 @@ class BenchmarkTests(unittest.TestCase):
                 writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
                 writer.writeheader()
                 writer.writerows(rows)
-            (root / 'dedupe-full-r1' / 'execution.json').write_text(json.dumps(fixture))
+            (root / 'dedupe-full-r1' / 'execution.json').write_text(json.dumps(fixture), encoding='utf-8', newline='\n')
             subprocess.run(command + ['report'], check=True, capture_output=True)
             with score_path.open() as stream:
                 added = list(csv.DictReader(stream))

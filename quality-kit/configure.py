@@ -3,6 +3,7 @@
 import argparse
 import json
 from pathlib import Path
+from runtime_support import configure_stdio
 
 
 def main():
@@ -29,4 +30,5 @@ def main():
 
 
 if __name__ == '__main__':
+    configure_stdio()
     main()

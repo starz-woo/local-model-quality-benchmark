@@ -7,6 +7,8 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import shutil
+from runtime_support import file_lock, process_options, stop_process_tree, utf8_environment, configure_stdio
 
 KIT = Path(__file__).resolve().parent
 
@@ -24,21 +26,13 @@ def run_command(argv, root, timeout):
     # Output goes to a file rather than an unbounded in-memory pipe.
     with tempfile.TemporaryFile() as output:
         try:
-            process = subprocess.Popen(argv, cwd=root, stdout=output, stderr=subprocess.STDOUT, start_new_session=(os.name == 'posix'))
+            process = subprocess.Popen(argv, cwd=root, stdout=output, stderr=subprocess.STDOUT, env=utf8_environment(), **process_options())
         except OSError as exc:
             return False, str(exc)
         try:
             code = process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
-            if os.name == 'posix':
-                import signal
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-            else:
-                process.kill()
-            process.wait()
+            stop_process_tree(process)
             return False, f'Command timed out after {timeout}s: {argv!r}'
         size = output.tell()
         output.seek(0)
@@ -62,7 +56,7 @@ def state_path(root, event):
 def save(path, state):
     fd, name = tempfile.mkstemp(dir=path.parent)
     try:
-        with os.fdopen(fd, 'w') as stream:
+        with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as stream:
             json.dump(state, stream)
         os.replace(name, path)
     finally:
@@ -74,23 +68,18 @@ def emit_context(message):
 
 
 def handle(event):
-    # macOS/Linux: serialize hooks for a project/session so parallel tool calls
-    # cannot overwrite counters or race the Stop gate.
-    import fcntl
     root = Path(os.environ.get('CLAUDE_PROJECT_DIR') or event.get('cwd') or os.getcwd()).resolve()
     lock = state_path(root, event).with_suffix('.lock')
-    fd = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        fcntl.flock(stream, fcntl.LOCK_EX)
+    with file_lock(lock):
         return handle_locked(event)
 
 
 def handle_locked(event):
-    config = json.loads((KIT / 'config.json').read_text())
+    config = json.loads((KIT / 'config.json').read_text(encoding='utf-8'))
     root = Path(os.environ.get('CLAUDE_PROJECT_DIR') or event.get('cwd') or os.getcwd()).resolve()
     path = state_path(root, event)
     try:
-        state = json.loads(path.read_text())
+        state = json.loads(path.read_text(encoding='utf-8'))
     except FileNotFoundError:
         state = {'calls': 0, 'dirty': False, 'failures': 0}
     name = event.get('hook_event_name')
@@ -133,7 +122,10 @@ def handle_locked(event):
                         elif file.suffix == '.json':
                             json.loads(content)
                         elif file.suffix == '.sh':
-                            commands.append(['bash', '-n', str(file)])
+                            if shutil.which('bash'):
+                                commands.append(['bash', '-n', str(file)])
+                            else:
+                                messages.append('Bash is unavailable: .sh syntax check NOT RUN, not a verification pass.')
                     except (SyntaxError, ValueError, UnicodeError) as exc:
                         messages.append(f'Syntax check FAILED: {exc}')
                     for command in config.get('verify_by_suffix', {}).get(file.suffix, []):
@@ -174,6 +166,7 @@ def handle_locked(event):
 
 
 if __name__ == '__main__':
+    configure_stdio()
     try:
         sys.exit(handle(json.load(sys.stdin)))
     except Exception as exc:

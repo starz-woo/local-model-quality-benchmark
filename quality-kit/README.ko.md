@@ -5,8 +5,11 @@
 
 이 패키지는 글의 아이디어를 Claude Code 공개 CLI/훅으로 적용한 별도 구현입니다.
 원문 프로젝트 코드를 복사하거나 원문의 수치를 재현한 것은 아닙니다.
-macOS/Linux, Python 3.10 이상과 기존에 로컬 모델에 연결된 Claude Code가 필요합니다.
-추가 Python 패키지나 jq는 필요 없습니다. Windows 네이티브는 지원하지 않습니다.
+Windows 네이티브/ macOS / Linux, Python 3.10 이상과 기존에 로컬 모델에 연결된 Claude Code가 필요합니다.
+추가 Python 패키지나 jq는 필요 없습니다. Windows는 native claude.exe와 PowerShell을 사용합니다.
+WSL/Bash는 키트 실행의 필수 조건이 아닙니다. npm .cmd/.bat Claude 래퍼 대신 native 설치를 사용하세요.
+Windows에서는 아래 python3 명령 대신 py -3을 사용하면 됩니다.
+macOS 자체 검사는 수행했지만 실제 Windows 모델 E2E는 아직 검증하지 않았습니다.
 모델 주소·인증·모델 이름은 기존 Claude Code 실행 환경을 그대로 사용합니다.
 
 ## 가장 짧은 사용법
@@ -21,6 +24,8 @@ python3 local-quality-kit/launch.py
 
 기존 .claude/settings.json, CLAUDE.md, 모델 설정은 수정하지 않습니다.
 전용 실행기를 사용한 세션에만 이 키트의 설정과 고정 지침이 추가됩니다.
+실행 시 OS에 맞는 임시 훅 설정을 생성합니다. Windows는 PowerShell 명령을 사용하므로
+settings.json 템플릿을 Windows 프로젝트에 그대로 복사하지 말고 launch.py로 시작하세요.
 기존 설정의 훅도 남아 있으므로 앞서 만든 verify/gate를 동시에 사용하면 중복 검사가
 발생할 수 있습니다. 이 키트를 비교 시험할 때는 기존 훅과의 중복부터 확인하세요.
 훅 스크립트는 사용자 권한으로 실행되며 Claude의 개별 Bash 승인과 별개입니다.
