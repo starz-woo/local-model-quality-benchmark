@@ -121,9 +121,16 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(data['hookSpecificOutput']['hookEventName'], 'PostToolUse')
         self.assertIn('FAILED', data['hookSpecificOutput']['additionalContext'])
 
+    def test_launcher_default_adds_no_hooks_prompt_or_environment(self):
+        import launch
+        with patch.object(sys, 'argv', ['launch.py', '--model', 'my-local-model']), patch.object(launch, 'find_claude', return_value='/fake/claude'), patch('subprocess.call', return_value=0) as execute:
+            launch.main()
+        self.assertEqual(execute.call_args.args[0], ['/fake/claude', '--model', 'my-local-model'])
+        self.assertEqual(execute.call_args.kwargs['env'].get('LOCAL_QUALITY_KIT'), os.environ.get('LOCAL_QUALITY_KIT'))
+
     def test_launcher_adds_settings_and_preserves_environment(self):
         import launch
-        with patch.object(sys, 'argv', ['launch.py', '--model', 'my-local-model']), patch.object(launch, 'find_claude', return_value='/fake/claude', create=True), patch('shutil.which', return_value='/fake/claude'), patch('subprocess.call', return_value=0) as execute:
+        with patch.object(sys, 'argv', ['launch.py', '--legacy-full', '--model', 'my-local-model']), patch.object(launch, 'find_claude', return_value='/fake/claude', create=True), patch('shutil.which', return_value='/fake/claude'), patch('subprocess.call', return_value=0) as execute:
             launch.main()
         self.assertTrue(execute.called, 'launcher must use a Windows-compatible subprocess rather than execvpe')
         argv = execute.call_args.args[0]
@@ -144,7 +151,7 @@ class QualityTests(unittest.TestCase):
     def test_launcher_keeps_npm_command_prefix(self):
         import launch
         prefix = ['C:/Program Files/node.exe', 'C:/npm 한글 & dir/cli.js']
-        for flags in ([], ['--baseline']):
+        for flags in ([], ['--baseline'], ['--legacy-full']):
             with self.subTest(flags=flags), patch.object(sys, 'argv', ['launch.py'] + flags + ['-p', '한글 " & %PATH% ! ^ | >']), patch.object(launch, 'find_claude', return_value='C:/npm/claude.cmd'), patch.object(launch, 'claude_command', return_value=prefix, create=True), patch('subprocess.call', return_value=7) as execute:
                 self.assertEqual(launch.main(), 7)
                 self.assertEqual(execute.call_args.args[0][:2], prefix)

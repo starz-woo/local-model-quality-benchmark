@@ -44,7 +44,7 @@ def report(runs):
         from integrity import current
         evaluated = result is not None and current(directory, result)
         valid_exit = execution is not None and execution.get('exit_code') == 0 and not execution.get('timed_out') and not execution.get('api_error', False)
-        row = {'run_id': run_id, 'task_id': meta['task_id'], 'condition': meta['condition'], 'repeat': meta['repeat'], 'attempted': execution is not None, 'evaluated': evaluated, 'success': bool(evaluated and execution is not None and result['success'] and valid_exit), 'functional_pass': result['functional_pass'] if evaluated else None, 'protected_changes': ';'.join(result['protected_changes']) if evaluated else '', 'seconds': execution.get('seconds') if execution else None, 'timed_out': execution.get('timed_out') if execution else None, 'input_tokens': execution.get('usage', {}).get('input_tokens') if execution else None, 'output_tokens': execution.get('usage', {}).get('output_tokens') if execution else None}
+        row = {'run_id': run_id, 'task_id': meta['task_id'], 'condition': meta['condition'], 'repeat': meta['repeat'], 'attempted': execution is not None, 'evaluated': evaluated, 'success': bool(evaluated and execution is not None and result['success'] and valid_exit), 'functional_pass': result['functional_pass'] if evaluated else None, 'protected_changes': ';'.join(result['protected_changes']) if evaluated else '', 'seconds': execution.get('seconds') if execution else None, 'timed_out': execution.get('timed_out') if execution else None, 'input_tokens': execution.get('usage', {}).get('input_tokens') if execution else None, 'output_tokens': execution.get('usage', {}).get('output_tokens') if execution else None, 'cache_read_input_tokens': execution.get('usage', {}).get('cache_read_input_tokens') if execution else None, 'cache_creation_input_tokens': execution.get('usage', {}).get('cache_creation_input_tokens') if execution else None}
         rows.append(row)
         if execution is None:
             continue
@@ -62,8 +62,10 @@ def report(runs):
         evidence = {'exit_code': execution.get('exit_code'), 'timed_out': execution.get('timed_out'), 'independent_grader': result.get('grader') if evaluated else {'status': 'missing_or_stale_evaluation'}, 'protected_changes': result.get('protected_changes') if result else None, 'note': 'Native JSON final output is not a full tool transcript. Claims about prior checks may remain unverified.'}
         (bundle / 'evidence.txt').write_text(json.dumps(evidence, ensure_ascii=False, indent=2), encoding='utf-8', newline='\n')
         review_rows.append({'blind_id': blind_id, 'requirements_0_2': '', 'scope_0_2': '', 'maintainability_0_2': '', 'report_accuracy_0_2': '', 'test_quality': 'N/A', 'evidence': ''})
-    summary = {'conditions': {}, 'paired': {'complete_pairs': 0, 'full_only_success': 0, 'baseline_only_success': 0, 'both_success': 0, 'both_fail': 0}, 'note': 'Descriptive pilot results, not a statistical significance claim. No model attempts means null success rate. Pending evaluations are not treated as completed results.'}
-    for condition in ('baseline', 'full'):
+    conditions = list(dict.fromkeys(r['condition'] for r in rows))
+    conditions.sort(key=lambda c: ('baseline', 'minimal', 'full').index(c))
+    summary = {'conditions': {}, 'comparisons': {}, 'note': 'Descriptive pilot results, not a statistical significance claim. No model attempts means null success rate. Pending evaluations are not treated as completed results. Missing cache usage is unknown, not zero. This is not a cache benchmark.'}
+    for condition in conditions:
         scheduled = [r for r in rows if r['condition'] == condition]
         attempted = [r for r in scheduled if r['attempted']]
         completed = [r for r in attempted if r['evaluated']]
@@ -71,14 +73,21 @@ def report(runs):
         times = [r['seconds'] for r in completed if r['seconds'] is not None]
         summary['conditions'][condition] = {'scheduled': len(scheduled), 'attempted': len(attempted), 'evaluated_attempts': len(completed), 'pending_evaluations': len(attempted) - len(completed), 'successes': successes, 'success_rate': successes / len(completed) if completed else None, 'median_agent_seconds': statistics.median(times) if times else None, 'timeouts': sum(bool(r['timed_out']) for r in completed)}
     indexed = {(r['task_id'], r['repeat'], r['condition']): r for r in rows}
-    for task_id, repeat in sorted({(r['task_id'], r['repeat']) for r in rows}):
-        a = indexed[(task_id, repeat, 'baseline')]
-        b = indexed[(task_id, repeat, 'full')]
-        if not all(r['attempted'] and r['evaluated'] for r in (a, b)):
-            continue
-        summary['paired']['complete_pairs'] += 1
-        key = 'both_success' if a['success'] and b['success'] else 'baseline_only_success' if a['success'] else 'full_only_success' if b['success'] else 'both_fail'
-        summary['paired'][key] += 1
+    for condition in (c for c in conditions if c != 'baseline'):
+        paired = {'complete_pairs': 0, f'{condition}_only_success': 0, 'baseline_only_success': 0, 'both_success': 0, 'both_fail': 0}
+        for task_id, repeat in sorted({(r['task_id'], r['repeat']) for r in rows}):
+            a = indexed.get((task_id, repeat, 'baseline'))
+            b = indexed.get((task_id, repeat, condition))
+            if a is None or b is None or not all(r['attempted'] and r['evaluated'] for r in (a, b)):
+                continue
+            paired['complete_pairs'] += 1
+            key = 'both_success' if a['success'] and b['success'] else 'baseline_only_success' if a['success'] else f'{condition}_only_success' if b['success'] else 'both_fail'
+            paired[key] += 1
+        summary['comparisons'][condition] = paired
+    # Preserve the old two-condition schema for existing report consumers.
+    primary = 'minimal' if 'minimal' in summary['comparisons'] else 'full'
+    summary['paired_condition'] = primary
+    summary['paired'] = summary['comparisons'].get(primary, {'complete_pairs': 0})
     (runs / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2) + '\n', encoding='utf-8', newline='\n')
     with (runs / 'results.csv').open('w', newline='', encoding='utf-8') as stream:
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]) if rows else ['run_id'])
@@ -100,7 +109,7 @@ def report(runs):
     text = '# Benchmark summary\n\n' + summary['note'] + '\n\n'
     for condition, value in summary['conditions'].items():
         text += f'## {condition}\n\n```json\n' + json.dumps(value, indent=2) + '\n```\n\n'
-    text += '## Paired outcomes\n\n```json\n' + json.dumps(summary['paired'], indent=2) + '\n```\n'
+    text += '## Paired outcomes\n\n```json\n' + json.dumps(summary['comparisons'], indent=2) + '\n```\n'
     (runs / 'summary.md').write_text(text, encoding='utf-8', newline='\n')
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return summary
