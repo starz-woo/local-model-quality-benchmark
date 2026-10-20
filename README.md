@@ -224,6 +224,37 @@ python quality-kit/launch.py
 
 ## 8. 문제 해결
 
+### 벤치마크가 타임아웃인데 파일은 수정되어 있을 때
+
+편집된 코드가 수동 테스트를 통과해도, Claude가 테스트를 실행했거나 정상 종료했다는 뜻은 아닙니다.
+같은 폴더를 재사용하거나 전체 배치를 반복하지 말고, 새 폴더의 baseline 한 건에 진단 옵션을 사용하세요.
+
+```powershell
+python bench.py --runs ./runs/trace-01 prepare --repeats 1
+python bench.py --runs ./runs/trace-01 run --id dedupe-baseline-r1 --inherit-cli-config --diagnostics --timeout 300 --execute
+```
+
+두 번째 명령은 실제 모델 호출입니다. `trace-01`이 이미 있으면 새 경로를 쓰세요.
+`--diagnostics`는 `stream-json --verbose`로 진행 이벤트를 받아 화면에 도구 이름·요청·반환 여부와
+대기 시간을 표시합니다. 표시되는 `tool request`, `tool result ... ERROR`, `final result received`와
+타임아웃 시 마지막 단계만 읽거나 화면을 촬영하면 되며, 긴 로그를 다른 기기로 복사할 필요가 없습니다.
+도구 요청은 완료 증거가 아니며 `returned`도 테스트 통과를 보증하지 않습니다.
+표시되는 단계는 관측 정보이지 타임아웃 원인의 확정 판정은 아닙니다.
+
+각 실행 폴더에 다음 파일을 보관합니다.
+
+- `agent-output.json`: 실제 최종 result 이벤트만 저장. 최종 결과가 없으면 빈 파일이며 성공을 합성하지 않습니다.
+- `agent-output.events.jsonl`: 진단 모드의 원본 stdout 이벤트.
+- `agent-output.stderr.log`: stderr 경고·오류. 일반 실행에서도 stdout JSON과 분리합니다.
+- `execution.json`: 진단 모드 여부, 마지막 진행 단계 및 최종 결과 수신 여부(진단 모드).
+
+화면에는 도구 인자·파일 내용·명령 본문을 출력하지 않지만, 원본 이벤트·stderr에는 민감한 정보가
+포함될 수 있습니다. 원본 로그는 검토 없이 공유하거나 Git에 올리지 마세요.
+`api_error: true`는 실제 API 응답 오류뿐 아니라 최종 JSON 누락/파싱 실패에도 표시될 수 있습니다.
+`unrecognized_model`·텔레메트리 경고 한 줄만으로 실제 모델 요청 실패를 단정하지 마세요.
+
+### 자주 만나는 문제
+
 - **`py`를 찾을 수 없음:** `python`이 동작하면 그대로 쓰세요. `py`는 별도 Windows Launcher이며 필수가 아닙니다.
 - **`python`을 찾을 수 없음:** Python 설치/PATH를 확인하세요. macOS/Linux는 `python3`도 확인하세요.
 - **`--check`에서 Claude를 찾을 수 없음:** 같은 셸에서 `claude --version`을 확인하고 PATH를 점검하세요.

@@ -63,9 +63,9 @@ def run_process(command, cwd, output_path, timeout, env=None):
     import subprocess
     import time
     start = time.monotonic()
-    with output_path.open('wb') as output:
+    with output_path.open('wb') as output, output_path.with_suffix('.stderr.log').open('wb') as errors:
         try:
-            process = subprocess.Popen(command, cwd=cwd, env=utf8_environment(env), stdout=output, stderr=subprocess.STDOUT, **process_options())
+            process = subprocess.Popen(command, cwd=cwd, env=utf8_environment(env), stdout=output, stderr=errors, **process_options())
         except OSError as exc:
             return {'exit_code': None, 'timed_out': False, 'seconds': time.monotonic() - start, 'error': str(exc)}
         timed_out = False
@@ -129,6 +129,7 @@ def main():
     p.add_argument('--model-notes', default='not recorded; fill model/quantization/server settings for reproducibility')
     p.add_argument('--timeout', type=float, default=300)
     p.add_argument('--execute', action='store_true', help='Actually invoke Claude; otherwise dry run only')
+    p.add_argument('--diagnostics', action='store_true', help='Show live tool-stage progress; save raw stream and stderr separately')
     p.add_argument('--allow-ancestor-instructions', action='store_true', help='Explicitly accept recorded instruction contamination')
     args = parser.parse_args()
     try:
