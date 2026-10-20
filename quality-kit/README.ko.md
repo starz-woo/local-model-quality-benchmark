@@ -11,18 +11,27 @@ WSL/Bash는 키트 실행의 필수 조건이 아닙니다. npm .cmd/.bat는 패
 JS 진입점은 node.exe가 필요하고, EXE 진입점은 직접 실행합니다. 전역 설치와 node_modules/.bin을 지원합니다.
 사용자 정의 배치/PowerShell 래퍼의 추가 명령은 지원하지 않습니다. 매핑은 기존 Claude 설정/부모 환경변수로 유지하세요.
 `python quality-kit/launch.py --check`는 모델 호출 없이 선택한 command_prefix를 표시합니다.
-Windows에서는 아래 python3 명령 대신 py -3을 사용하면 됩니다.
+명령은 `python` 기준입니다. macOS/Linux에서 `python3`만 된다면 바꾸세요.
+Windows에서 `py`가 없어도 `python`이 동작하면 됩니다. `py` 설치는 필수가 아닙니다.
 macOS 자체 검사는 수행했지만 실제 Windows 모델 E2E는 아직 검증하지 않았습니다.
 모델 주소·인증·모델 이름은 기존 Claude Code 실행 환경을 그대로 사용합니다.
 
-## 가장 짧은 사용법
+## 1. 빠른 검사 — 모델 호출 없음
 
-1. ZIP을 풀고 local-quality-kit 폴더를 프로젝트 루트에 둡니다.
-2. 프로젝트 루트에서 실행합니다.
+저장소 루트에서 `python scripts/run_tests.py`를 실행하면 벤치마크와 키트를 함께 검사합니다.
+키트만 복사한 환경에서는 아래 [자체 코드 테스트](#자체-코드-테스트)를 사용하세요.
+모델 연결·인증 성공이나 품질 향상을 검사하는 명령은 아닙니다.
+A/B 시험 순서는 [저장소 빠른 테스트 가이드](../README.md#3-빠른-ab-한-문제만-비교)를 따르세요.
+
+## 2. 내 프로젝트에서 사용
+
+1. 이 저장소의 `quality-kit/` 폴더를 대상 프로젝트 루트에 복사합니다.
+2. 대상 프로젝트 루트에서 설치 경로를 확인한 뒤 세션을 시작합니다.
+   `--check`는 모델을 호출하지 않고, 다음 `launch.py` 명령은 실제 Claude 세션을 시작합니다.
 
 ```bash
-python3 local-quality-kit/launch.py --check
-python3 local-quality-kit/launch.py
+python quality-kit/launch.py --check
+python quality-kit/launch.py
 ```
 
 기존 .claude/settings.json, CLAUDE.md, 모델 설정은 수정하지 않습니다.
@@ -35,7 +44,7 @@ settings.json 템플릿을 Windows 프로젝트에 그대로 복사하지 말고
 검사 명령은 신뢰하는 프로젝트에서만 등록하세요. 권한 우회 플래그는 사용하지 않습니다.
 키트 코드를 사용할 프로젝트의 Git 정책에 맞게 개인 폴더 제외 또는 별도 브랜치에서 관리하세요.
 
-## 전체 테스트 게이트 켜기
+## 3. 전체 테스트 게이트 켜기
 
 프로젝트별 테스트 명령을 모르므로 기본 test_commands는 비어 있습니다.
 이 상태에서는 종료 시 '테스트 게이트 미실행' 안내가 나오며 통과로 간주하지 않습니다.
@@ -43,21 +52,25 @@ settings.json 템플릿을 Windows 프로젝트에 그대로 복사하지 말고
 
 ```bash
 # npm 프로젝트: scripts.test가 일회성 실행인지 확인
-python3 local-quality-kit/configure.py --test npm test
+python quality-kit/configure.py --test npm test
 
 # Python unittest 프로젝트 예시
-python3 local-quality-kit/configure.py --test python3 -m unittest discover -s tests
+python quality-kit/configure.py --test python -m unittest discover -s tests
 
 # 별도 테스트 래퍼가 있는 프로젝트 예시
-python3 local-quality-kit/configure.py --test ./scripts/run_tests.sh
+python quality-kit/configure.py --test ./scripts/run_tests.sh
 ```
+
+Windows의 npm/추가 도구 `.cmd`를 테스트 명령으로 직접 실행하는 것은 별도 지원 범위가 아닙니다.
+아래 npm·셸 스크립트 예시는 macOS/Linux 기준이며, Windows에서는 `python`이나 `node.exe`로
+직접 실행 가능한 프로젝트의 검토된 테스트 진입점을 등록하세요. Claude npm 설치 지원과는 별개입니다.
 
 명령은 셸 문자열이 아니라 인자 배열로 저장됩니다. &&, |, 리다이렉션 문법을 넣지 마세요.
 복합 명령은 프로젝트의 검토된 테스트 스크립트 하나로 묶어 등록하세요.
 watch 모드나 입력을 기다리는 명령은 사용하지 마세요.
 config.json은 키트 전체에 적용되므로 프로젝트마다 별도 키트 사본을 사용하세요.
 
-## 추가 린터 연결
+## 4. 추가 린터 연결
 
 config.json의 verify_by_suffix에 필요한 명령만 넣으세요. 도구는 사전 설치해야 합니다.
 키트가 자동으로 npx/pip 다운로드를 하지 않습니다.
@@ -105,7 +118,7 @@ Claude Code의 .claude 설정만으로 모든 로컬 추론 서버의 이런 기
 프로젝트 루트에서:
 
 ```bash
-python3 local-quality-kit/compact_run.py -- npm test
+python quality-kit/compact_run.py -- npm test
 ```
 
 기본 120초 제한, 실제 명령 종료 코드 보존, 전체 로그 위치 출력.
@@ -118,10 +131,10 @@ python3 local-quality-kit/compact_run.py -- npm test
 
 ```bash
 # 이 키트만 추가하지 않는 기준 실행 (기존 Claude 설정은 유지됨)
-python3 local-quality-kit/launch.py --baseline
+python quality-kit/launch.py --baseline
 
 # 적용 실행
-python3 local-quality-kit/launch.py
+python quality-kit/launch.py
 ```
 
 동일 모델/프롬프트/시작 코드/예산의 새 세션에서 반복 비교하세요.
@@ -132,8 +145,8 @@ baseline은 전역/프로젝트 기존 훅까지 끄는 옵션이 아닙니다.
 ## 자체 코드 테스트
 
 ```bash
-cd local-quality-kit
-python3 -m unittest -v test_kit.py
+cd quality-kit
+python -m unittest -v test_kit.py
 ```
 
 이는 키트의 단위/서브프로세스 테스트이며 실제 Claude 모델의 품질 평가가 아닙니다.
