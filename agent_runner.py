@@ -46,6 +46,10 @@ def execute(directory, args, run_process, write_json):
         raise ValueError('Run was already started. Never reuse a modified workspace; prepare a new --runs directory.')
     workspace = directory / 'workspace'
     command = ['claude', '-p', (workspace / 'TASK.md').read_text(encoding='utf-8'), '--output-format', 'json', '--no-session-persistence', '--settings', str(directory / 'settings.json')]
+    diagnostic_mode = getattr(args, 'diagnostics', False)
+    if diagnostic_mode:
+        command[command.index('--output-format') + 1] = 'stream-json'
+        command += ['--verbose']
     env = utf8_environment()
     if args.model:
         command += ['--model', args.model]
@@ -87,8 +91,13 @@ def execute(directory, args, run_process, write_json):
     except (OSError, subprocess.SubprocessError):
         version = 'unavailable'
     audit = {'run_id': meta['run_id'], 'model': args.model, 'model_notes': args.model_notes, 'base_url': args.base_url, 'claude_version': version, 'timeout_seconds': args.timeout, 'settings_sha256': hashlib.sha256((directory / 'settings.json').read_bytes()).hexdigest(), 'mode': 'real_agent_invocation', 'instruction_inputs': instruction_inputs, 'isolated_config_dir': config_dir, 'model_connection': 'inherited' if args.inherit_cli_config else 'isolated', 'usage': {}, 'response': ''}
+    audit['diagnostics'] = diagnostic_mode
     write_json(directory / 'execution.started.json', audit)
-    result = run_process(command, workspace, directory / 'agent-output.json', args.timeout, env=env)
+    if diagnostic_mode:
+        from diagnostics import run_stream_process
+        result = run_stream_process(command, workspace, directory / 'agent-output.json', args.timeout, env=env)
+    else:
+        result = run_process(command, workspace, directory / 'agent-output.json', args.timeout, env=env)
     try:
         output = json.loads((directory / 'agent-output.json').read_text(encoding='utf-8'))
         if not isinstance(output, dict):

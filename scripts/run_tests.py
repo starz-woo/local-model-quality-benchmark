@@ -13,7 +13,7 @@ def main():
     env = os.environ.copy()
     env.update(PYTHONUTF8='1', PYTHONIOENCODING='utf-8', PYTHONDONTWRITEBYTECODE='1', TMPDIR=str(temporary), TMP=str(temporary), TEMP=str(temporary))
     commands = [
-        (root, ['test_benchmark.py', 'test_native_runtime.py']),
+        (root, ['test_benchmark.py', 'test_native_runtime.py', 'test_diagnostics.py']),
         (root / 'quality-kit', ['test_kit.py']),
     ]
     for cwd, tests in commands:
