@@ -6,8 +6,11 @@
 이 패키지는 글의 아이디어를 Claude Code 공개 CLI/훅으로 적용한 별도 구현입니다.
 원문 프로젝트 코드를 복사하거나 원문의 수치를 재현한 것은 아닙니다.
 Windows 네이티브/ macOS / Linux, Python 3.10 이상과 기존에 로컬 모델에 연결된 Claude Code가 필요합니다.
-추가 Python 패키지나 jq는 필요 없습니다. Windows는 native claude.exe와 PowerShell을 사용합니다.
-WSL/Bash는 키트 실행의 필수 조건이 아닙니다. npm .cmd/.bat Claude 래퍼 대신 native 설치를 사용하세요.
+추가 Python 패키지나 jq는 필요 없습니다. Windows는 native claude.exe 또는 공식 npm 설치와 PowerShell을 사용합니다.
+WSL/Bash는 키트 실행의 필수 조건이 아닙니다. npm .cmd/.bat는 패키지 진입점을 셸 없이 직접 실행합니다.
+JS 진입점은 node.exe가 필요하고, EXE 진입점은 직접 실행합니다. 전역 설치와 node_modules/.bin을 지원합니다.
+사용자 정의 배치/PowerShell 래퍼의 추가 명령은 지원하지 않습니다. 매핑은 기존 Claude 설정/부모 환경변수로 유지하세요.
+`python quality-kit/launch.py --check`는 모델 호출 없이 선택한 command_prefix를 표시합니다.
 Windows에서는 아래 python3 명령 대신 py -3을 사용하면 됩니다.
 macOS 자체 검사는 수행했지만 실제 Windows 모델 E2E는 아직 검증하지 않았습니다.
 모델 주소·인증·모델 이름은 기존 Claude Code 실행 환경을 그대로 사용합니다.

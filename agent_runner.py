@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 from urllib.parse import urlparse
-from platform_support import find_claude, utf8_environment, workflow_prompt
+from platform_support import find_claude, claude_command, utf8_environment, workflow_prompt
 
 
 def validate_endpoint(value):
@@ -75,14 +75,15 @@ def execute(directory, args, run_process, write_json):
     executable = find_claude()
     if not executable:
         raise ValueError('claude executable not found')
-    command[0] = executable
+    prefix = claude_command(executable)
+    command = prefix + command[1:]
     if args.timeout <= 0:
         raise ValueError('timeout must be positive')
     from integrity import inventory
     if inventory(workspace) != meta['initial_sha256']:
         raise ValueError('Workspace is not pristine (changed, missing or extra files). Prepare a new run.')
     try:
-        version = subprocess.run([command[0], '--version'], capture_output=True, text=True, timeout=10).stdout.strip()
+        version = subprocess.run(prefix + ['--version'], env=env, capture_output=True, text=True, encoding='utf-8', timeout=10).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         version = 'unavailable'
     audit = {'run_id': meta['run_id'], 'model': args.model, 'model_notes': args.model_notes, 'base_url': args.base_url, 'claude_version': version, 'timeout_seconds': args.timeout, 'settings_sha256': hashlib.sha256((directory / 'settings.json').read_bytes()).hexdigest(), 'mode': 'real_agent_invocation', 'instruction_inputs': instruction_inputs, 'isolated_config_dir': config_dir, 'model_connection': 'inherited' if args.inherit_cli_config else 'isolated', 'usage': {}, 'response': ''}

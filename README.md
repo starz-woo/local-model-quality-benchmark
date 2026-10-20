@@ -16,7 +16,9 @@ Claude Code에 로컬 모델을 연결해 쓸 때, 품질 개선 키트의 적�
 ## 요구 환경
 
 - Windows 네이티브(PowerShell), macOS 또는 Linux. Python 3.10 이상.
-- Windows는 native `claude.exe` 사용. npm의 `.cmd` 실행 래퍼는 지원하지 않습니다.
+- Windows는 native `claude.exe` 및 공식 npm 설치의 `claude.cmd`/`.bat`를 지원합니다.
+  npm 패키지의 `bin.claude`를 읽어 JS 진입점은 `node.exe`, EXE 진입점은 직접 실행합니다.
+  JS 버전은 Node.js가 필요합니다. CMD 셸을 거치지 않습니다.
 - 실제 모델 실행 시에만 Claude Code 필요.
 - 로컬 모델을 제공하는 **Anthropic 호환 API 또는 로컬 변환 프록시**.
 - 격리 실행은 API 인증을 환경변수로 제공하고, --inherit-cli-config 모드는 기존 CLI 인증을 유지합니다.
@@ -43,6 +45,11 @@ python scripts/run_tests.py
 ## Windows 네이티브 + 현재 Claude 모델 매핑 유지
 
 WSL이나 Bash 없이 PowerShell에서 실행할 수 있도록 호환 코드를 추가했습니다.
+공식 npm 전역 설치 및 `node_modules/.bin` 레이아웃을 지원하며 PATH에서 먼저 찾은 Claude를 유지합니다.
+직접 수정한 배치 래퍼의 환경변수 설정·추가 명령, PowerShell 함수/별칭은 실행하지 않습니다.
+모델 매핑은 기존 Claude 설정 또는 부모 PowerShell의 환경변수로 제공하세요.
+`python quality-kit/launch.py --check`로 실제 선택한 실행 경로를 모델 호출 없이 확인할 수 있습니다.
+자체 검사와 벤치마크 dry-run에는 Claude/Node 설치가 필요 없습니다.
 Claude Code 자체도 최신 버전은 Git Bash가 없으면 PowerShell 도구를 사용합니다.
 공식 설치/셸 지원: https://code.claude.com/docs/en/setup
 
