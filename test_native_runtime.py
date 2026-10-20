@@ -112,5 +112,33 @@ for _ in range(5):
                 self.assertEqual(lock.stat().st_size, 0, 'lock files must not require a pre-lock sentinel write')
 
 
+    def test_dry_run_never_requires_a_claude_installation(self):
+        import argparse
+        import contextlib
+        import io
+        from unittest.mock import patch
+        import agent_runner
+        import bench
+        with tempfile.TemporaryDirectory() as directory:
+            runs = Path(directory)
+            with contextlib.redirect_stdout(io.StringIO()):
+                bench.prepare(runs, 1, 17)
+            args = argparse.Namespace(base_url=None, model=None, inherit_cli_config=True, execute=False)
+            output = io.StringIO()
+            with patch.object(agent_runner, 'find_claude', side_effect=ValueError('only npm claude.cmd exists')) as locate, contextlib.redirect_stdout(output):
+                agent_runner.execute(runs / 'dedupe-baseline-r1', args, bench.run_process, bench.write_json)
+            self.assertFalse(locate.called, 'dry run must not validate actual Claude installations')
+            self.assertIn('dry_run', output.getvalue())
+            self.assertFalse((runs / 'dedupe-baseline-r1' / 'execution.json').exists())
+            # Real execution must still validate the installation, not silently
+            # try to run the unsupported shim after bypassing the dry-run check.
+            args.execute = True
+            args.allow_ancestor_instructions = True
+            with patch.object(agent_runner, 'find_claude', side_effect=ValueError('only npm claude.cmd exists')) as locate:
+                with self.assertRaisesRegex(ValueError, 'only npm claude.cmd'):
+                    agent_runner.execute(runs / 'dedupe-baseline-r1', args, bench.run_process, bench.write_json)
+            self.assertEqual(locate.call_count, 1)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
