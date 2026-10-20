@@ -253,6 +253,25 @@ python bench.py --runs ./runs/trace-01 run --id dedupe-baseline-r1 --inherit-cli
 `api_error: true`는 실제 API 응답 오류뿐 아니라 최종 JSON 누락/파싱 실패에도 표시될 수 있습니다.
 `unrecognized_model`·텔레메트리 경고 한 줄만으로 실제 모델 요청 실패를 단정하지 마세요.
 
+### 승인 요구가 반복될 때
+
+`command contains multiple operations` 또는 `following part requires approval`은 도구가 명령을
+승인 없이 실행할 수 없다는 뜻입니다. 모델 연결 실패와는 구분하세요.
+기본 허용은 Python unittest 계열이며, 임의 검사 스크립트나 복합 셸 명령으로 넓히지 않습니다.
+특히 추가 `.py` 검사 파일은 수정 허용 범위(`solution.py`만)도 벗어날 수 있습니다.
+
+새로 준비한 `TASK.md`는 두 조건 모두 동일한 비대화형 실행 계약을 포함합니다.
+현재 위치가 workspace임을 명시하고, 공개 테스트를 한 개 명령으로 실행하며, 추가 스크립트나
+`cd`/`&&`/파이프 등의 결합을 금지합니다. 승인 거부 시 형태만 바꿔 반복하지 않고,
+공개 검사 단일 명령도 거부되면 `BLOCKED`와 이유를 보고하도록 지시합니다.
+이것은 모델 지침이지 강제 종료 장치가 아니므로 모든 모델의 준수를 보장하지 않습니다.
+
+`--diagnostics`는 해당 오류 문구를 감지하면 `ERROR APPROVAL_REQUIRED`로 표시하고
+`execution.json`에 `approval_error_count`를 기록합니다. 원문 명령/인자는 화면에 노출하지 않습니다.
+기존 TASK.md는 소급 수정하지 않습니다. **새 `--runs`에서 prepare**하고 한 건부터 확인하세요.
+공통 지침이 달라졌으므로 수정 전후 실행을 동일 프롬프트의 대응 쌍으로 섞어 집계하지 마세요.
+권한 우회 플래그나 임의 Python 스크립트 실행 허용을 해결책으로 추가하지 않았습니다.
+
 ### 자주 만나는 문제
 
 - **`py`를 찾을 수 없음:** `python`이 동작하면 그대로 쓰세요. `py`는 별도 Windows Launcher이며 필수가 아닙니다.

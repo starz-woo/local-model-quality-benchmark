@@ -29,6 +29,7 @@ def prepare(runs, repeats, seed):
         raise ValueError('Output directory is not empty; use a new --runs path. Existing work is never overwritten.')
     runs.mkdir(parents=True, exist_ok=True)
     schedule = []
+    public_test_command = ['python' if IS_WINDOWS else 'python3', '-m', 'unittest', 'discover', '-s', 'tests', '-v']
     for task_id, task in TASKS.items():
         for repeat in range(1, repeats + 1):
             for condition in ('baseline', 'full'):
@@ -37,7 +38,7 @@ def prepare(runs, repeats, seed):
                 workspace = directory / 'workspace'
                 (workspace / 'tests').mkdir(parents=True)
                 (workspace / 'solution.py').write_text(task['starter'], encoding='utf-8', newline='\n')
-                (workspace / 'TASK.md').write_text(task['request'] + (COMMON.replace('python3 -m unittest', 'python -m unittest') if IS_WINDOWS else COMMON), encoding='utf-8', newline='\n')
+                (workspace / 'TASK.md').write_text(task['request'] + COMMON.replace('{public_test_command}', ' '.join(public_test_command)), encoding='utf-8', newline='\n')
                 (workspace / 'tests' / 'test_public.py').write_text(task['public'], encoding='utf-8', newline='\n')
                 initial = {path.relative_to(workspace).as_posix(): digest(path.read_bytes()) for path in workspace.rglob('*') if path.is_file()}
                 settings = {'autoMemoryEnabled': False}
@@ -52,7 +53,7 @@ def prepare(runs, repeats, seed):
                     settings['disableAllHooks'] = True
                 write_json(directory / 'settings.json', settings)
                 write_json(directory / 'mcp.json', {'mcpServers': {}})
-                write_json(directory / 'meta.json', {'run_id': run_id, 'task_id': task_id, 'condition': condition, 'repeat': repeat, 'initial_sha256': initial})
+                write_json(directory / 'meta.json', {'run_id': run_id, 'task_id': task_id, 'condition': condition, 'repeat': repeat, 'initial_sha256': initial, 'allowed_test_command': public_test_command})
                 schedule.append(run_id)
     random.Random(seed).shuffle(schedule)
     write_json(runs / 'manifest.json', {'seed': seed, 'repeats': repeats, 'schedule': schedule, 'note': 'Task fixtures and metadata only. No model performance has been measured.'})

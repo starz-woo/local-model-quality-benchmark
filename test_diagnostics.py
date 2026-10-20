@@ -69,6 +69,22 @@ class DiagnosticTests(unittest.TestCase):
             self.assertFalse(result['final_result_received'])
             self.assertEqual(output.read_text(encoding='utf-8'), '')
 
+    def test_approval_error_is_labeled_without_echoing_command(self):
+        from diagnostics import run_stream_process
+        events = [
+            {'type': 'assistant', 'message': {'content': [{'type': 'tool_use', 'id': 'x', 'name': 'PowerShell'}]}},
+            {'type': 'user', 'message': {'content': [{'type': 'tool_result', 'tool_use_id': 'x', 'is_error': True, 'content': 'command contains multiple operations; following part requires approval python -I check_extra.py'}]}},
+        ]
+        program = 'import sys,json; [print(json.dumps(e),flush=True) for e in json.loads(sys.argv[1])]'
+        with tempfile.TemporaryDirectory() as directory:
+            progress = io.StringIO()
+            with contextlib.redirect_stderr(progress):
+                result = run_stream_process([sys.executable, '-c', program, json.dumps(events)], Path(directory), Path(directory) / 'agent-output.json', 5)
+            self.assertIn('APPROVAL_REQUIRED', progress.getvalue())
+            self.assertEqual(result['approval_error_count'], 1)
+            self.assertNotIn('check_extra.py', progress.getvalue())
+            self.assertFalse(result['final_result_received'])
+
     def test_stream_interrupt_stops_the_child(self):
         from diagnostics import run_stream_process, stop_process_tree
         with tempfile.TemporaryDirectory() as directory:

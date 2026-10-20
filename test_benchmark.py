@@ -24,6 +24,28 @@ class BenchmarkTests(unittest.TestCase):
             self.assertTrue(manifest['schedule'])
 
 
+    def test_shared_headless_contract_matches_allowed_command(self):
+        import bench
+        with tempfile.TemporaryDirectory() as directory:
+            runs = Path(directory)
+            from contextlib import redirect_stdout
+            import io
+            with redirect_stdout(io.StringIO()):
+                bench.prepare(runs, 1, 17)
+            for condition in ('baseline', 'full'):
+                run = runs / f'dedupe-{condition}-r1'
+                meta = json.loads((run / 'meta.json').read_text(encoding='utf-8'))
+                command = meta['allowed_test_command']
+                text = (run / 'workspace' / 'TASK.md').read_text(encoding='utf-8')
+                self.assertIn(' '.join(command), text)
+                self.assertIn('BLOCKED', text)
+                dry = subprocess.run([sys.executable, str(ROOT / 'bench.py'), '--runs', str(runs), 'run', '--id', run.name, '--inherit-cli-config'], capture_output=True, text=True, encoding='utf-8', check=True)
+                argv = json.loads(dry.stdout)['command']
+                rules = argv[argv.index('--allowedTools') + 1]
+                self.assertIn('Bash(' + ' '.join(command[:3]) + ' *)', rules)
+                self.assertNotIn('--dangerously-skip-permissions', argv)
+            self.assertEqual((runs / 'dedupe-baseline-r1/workspace/TASK.md').read_bytes(), (runs / 'dedupe-full-r1/workspace/TASK.md').read_bytes())
+
     def test_grader_rejects_starters_and_accepts_references(self):
         from tasks import TASKS
         with tempfile.TemporaryDirectory() as directory:
