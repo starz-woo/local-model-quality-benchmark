@@ -14,7 +14,7 @@ def run_stream_process(command, cwd, output_path, timeout, env=None):
     start = time.monotonic()
     events_path = output_path.with_suffix('.events.jsonl')
     errors_path = output_path.with_suffix('.stderr.log')
-    state = {'last': 'waiting for first event', 'final': None, 'tools': {}}
+    state = {'last': 'waiting for first event', 'final': None, 'tools': {}, 'approval_errors': 0}
 
     def progress(label):
         state['last'] = label
@@ -55,6 +55,12 @@ def run_stream_process(command, cwd, output_path, timeout, env=None):
                     tool_id = block.get('tool_use_id')
                     name = state['tools'].get(tool_id, 'unknown-tool') if isinstance(tool_id, str) else 'unknown-tool'
                     outcome = 'ERROR' if block.get('is_error') else 'returned'
+                    payload = block.get('content', '')
+                    if isinstance(payload, list):
+                        payload = ' '.join(item.get('text', '') for item in payload if isinstance(item, dict) and isinstance(item.get('text'), str))
+                    if block.get('is_error') and isinstance(payload, str) and re.search(r'requires approval|approval required', payload, re.IGNORECASE):
+                        state['approval_errors'] += 1
+                        outcome += ' APPROVAL_REQUIRED'
                     progress(f'tool result: {name} {outcome}')
                     found_tool = True
             if kind == 'assistant' and not found_tool:
@@ -66,7 +72,7 @@ def run_stream_process(command, cwd, output_path, timeout, env=None):
         try:
             process = subprocess.Popen(command, cwd=cwd, env=utf8_environment(env), stdout=subprocess.PIPE, stderr=errors, **process_options())
         except OSError as exc:
-            return {'exit_code': None, 'timed_out': False, 'seconds': time.monotonic() - start, 'error': str(exc), 'final_result_received': False, 'last_progress': state['last']}
+            return {'exit_code': None, 'timed_out': False, 'seconds': time.monotonic() - start, 'error': str(exc), 'final_result_received': False, 'last_progress': state['last'], 'approval_error_count': state['approval_errors']}
         assert process.stdout is not None
         stdout_pipe = process.stdout
         lines = queue.Queue()
@@ -125,4 +131,4 @@ def run_stream_process(command, cwd, output_path, timeout, env=None):
     final = state['final']
     if final is not None:
         output_path.write_text(json.dumps(final, ensure_ascii=False), encoding='utf-8')
-    return {'exit_code': code, 'timed_out': timed_out, 'seconds': time.monotonic() - start, 'final_result_received': final is not None, 'last_progress': state['last']}
+    return {'exit_code': code, 'timed_out': timed_out, 'seconds': time.monotonic() - start, 'final_result_received': final is not None, 'last_progress': state['last'], 'approval_error_count': state['approval_errors']}
