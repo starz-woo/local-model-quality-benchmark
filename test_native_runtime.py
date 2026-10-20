@@ -60,7 +60,7 @@ for _ in range(5):
         import json
         with tempfile.TemporaryDirectory() as directory:
             base = [sys.executable, str(ROOT / 'bench.py'), '--runs', directory]
-            subprocess.run(base + ['prepare', '--repeats', '1'], check=True, capture_output=True)
+            subprocess.run(base + ['prepare', '--repeats', '1', '--conditions', 'baseline', 'full'], check=True, capture_output=True)
             result = subprocess.run(base + ['run', '--id', 'dedupe-baseline-r1', '--inherit-cli-config'], capture_output=True, text=True, encoding='utf-8')
             self.assertEqual(result.returncode, 0, result.stderr)
             dry = json.loads(result.stdout)

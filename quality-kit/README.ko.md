@@ -1,166 +1,155 @@
-# Claude Code + 로컬 모델 품질 개선 키트
+# 프로젝트 지침 배포와 레거시 키트 안내
+
+기본 사용법은 `minimal-kit/INSTRUCTIONS.md`의 공통 지침을 프로젝트 `CLAUDE.md`·`AGENTS.md`에
+설치하고, 평소처럼 `claude` 또는 `codex`를 실행하는 것입니다. `quality-kit/`를 복사하거나 훅을 등록할 필요는 없습니다.
+품질·속도 개선은 입증하지 않았으며, 설치 성공이 모델의 지침 로딩·준수나 캐시 적중을 보장하지 않습니다.
+
+아래 Python 명령은 이 저장소 루트에서 실행합니다. Python 3.10 이상과 표준 라이브러리만 사용합니다.
+Windows 네이티브 PowerShell에서도 사용할 수 있고 WSL은 필요 없습니다. `python`이 동작하면 `py`는
+없어도 됩니다. macOS/Linux에서 `python3`만 된다면 명령의 `python`을 바꿔 쓰세요.
+모델 주소·인증·CC Switch 매핑은 기존 CLI 환경에서 관리합니다.
+
+## 1. 프로젝트에 최소 지침 설치
+
+`C:/work/my-project`를 대상 프로젝트 경로로 바꾸세요. macOS/Linux에서도 해당 환경의 경로를 사용하면 됩니다.
+
+```powershell
+# 미리보기: 파일을 쓰거나 모델을 호출하지 않음
+python scripts/install_instructions.py --target "C:/work/my-project" --cli both
+
+# 실제 적용
+python scripts/install_instructions.py --target "C:/work/my-project" --cli both --apply
+```
+
+| 옵션 | 대상 파일 |
+| --- | --- |
+| `--cli claude` | `CLAUDE.md` |
+| `--cli codex` | `AGENTS.md` |
+| `--cli both` (기본값) | 두 파일 모두 |
+
+공통 원본은 `minimal-kit/INSTRUCTIONS.md` 하나입니다. 설치기는 선택한 파일에 관리 블록을 넣고,
+다시 적용하면 같은 블록을 갱신합니다. 기존 파일의 블록 밖 내용은 보존하며 같은 지침을 중복 추가하지 않습니다.
+심볼릭 링크 대상이나 충돌·손상된 관리 마커가 있으면 쓰기를 거부하므로 먼저 파일을 검토하세요.
+
+`.claude/settings.json`, 인증 파일, 모델 설정, CC Switch 설정은 변경하지 않습니다.
+전역 MD·훅·자동 메모리 설정도 설치하거나 변경하지 않습니다. 동적 작업 단계·진행률·임시 상태는 MD에 기록하지 않습니다.
+
+적용 후 **대상 프로젝트로 이동해서** 새 세션을 시작하세요. 아래는 실제 CLI 세션을 시작하는 명령입니다.
+
+```powershell
+claude
+# 또는
+codex
+```
+
+지침 파일을 읽는 범위·우선순위는 각 CLI의 규칙과 설정에 따릅니다. 두 CLI의 지침 원본이 같아도
+도구·프롬프트 구성·모델·동작까지 같다는 뜻은 아닙니다. Codex 자동 벤치마크는 제공하지 않습니다.
+
+### 업데이트와 제거
+
+원본 지침이 변경되면 같은 설치 명령을 미리보기한 뒤 `--apply`로 갱신하세요.
+제거도 기본은 미리보기이며 `--apply`를 붙여야 파일을 수정합니다.
+
+```powershell
+python scripts/install_instructions.py --target "C:/work/my-project" --cli both --remove
+python scripts/install_instructions.py --target "C:/work/my-project" --cli both --remove --apply
+```
+
+선택한 파일의 관리 블록만 제거합니다. 기존 사용자 지침이나 별도로 등록한 훅은 제거하지 않습니다.
+프로젝트의 Git 정책에 맞게 지침 변경 diff를 검토하세요.
+
+## 2. 기본 실행기는 기존 Claude 그대로
+
+직접 `claude`를 실행하면 충분합니다. 호환 실행기를 쓰고 싶다면 다음 명령을 사용할 수 있습니다.
+아래 상대 경로는 저장소 루트 기준이며, 다른 프로젝트에서 사용하려면 실행기의 실제 경로를 지정하세요.
+
+```powershell
+# 경로·command_prefix·프로필 확인: 모델 호출 없음
+python quality-kit/launch.py --check
+
+# 기존 Claude 세션 시작: 실제 모델 호출 가능
+python quality-kit/launch.py
+```
+
+기본 실행은 기존 Claude CLI로 인자를 전달할 뿐, 키트 프롬프트·훅을 주입하거나 설정을 바꾸지 않습니다.
+설치된 `CLAUDE.md`는 Claude의 평소 규칙으로 읽습니다. 사용자의 기존 훅이나 자동 메모리도 이 실행기가 끄지 않습니다.
+`--baseline`은 이 일반 실행의 별칭이며, **이미 설치된 MD를 끄는 옵션이 아닙니다.**
+따라서 이 실행기의 기본 실행과 `--baseline`을 지침 적용 전후 A/B로 비교하지 마세요.
+
+`--check`는 선택한 실행 경로·프로필 검사입니다. 인증·모델 연결·MD 로딩·캐시 적중을 확인하지 않습니다.
+공식 native Claude와 npm `.cmd`/`.bat` 설치를 지원하고 JS 진입점은 Node가 필요합니다.
+사용자 정의 배치·PowerShell 래퍼의 추가 명령은 실행하지 않습니다.
+
+## 3. 모델 호출 전 검사와 A/B
+
+```powershell
+python scripts/run_tests.py
+```
+
+자체 검사는 모델을 호출하지 않습니다. 실제 성능 비교는 [루트 README](../README.md)의
+자체 검사 → dry-run → 선택적 한 문제 A/B 순서를 따르세요.
+벤치마크는 `baseline`과 `minimal`을 기본 준비하며, minimal workspace의 `CLAUDE.md`에 공통 원본을 배포합니다.
+키트 복사·`--append-system-prompt` 없이 비교하고 두 조건의 훅·자동 메모리를 끕니다. `TASK.md`는 동일합니다.
+이 제어는 벤치마크에만 해당하며 일반 프로젝트 설치에는 적용되지 않습니다.
+
+`run`·`evaluate`·`report`는 Claude 전용입니다. 기존 연결을 쓰는 `--inherit-cli-config`는 개인 지침·MCP·
+클라우드 매핑의 영향을 유지합니다. 실제 실행은 `--execute`로만 시작하며 상위 지침 발견 시 기본 거부합니다.
+허용 여부는 dry-run을 검토한 뒤 판단하세요. `--allow-ancestor-instructions`는 격리 기능이 아니라 영향 수락입니다.
+
+채점은 신뢰할 수 없는 후보 코드를 실행하며 OS 샌드박스가 아닙니다. 실제 Windows/로컬 모델 조합의
+E2E 검증 완료나 품질 향상을 자체 테스트 결과로 대신 주장하지 않습니다.
+
+## 4. 최소 지침이 하는 일과 하지 않는 일
+
+| 참고 아이디어 | 최소 지침의 범위 |
+| --- | --- |
+| 구조화된 작업·보고 | 목표·완료 조건·제약·검증을 확인하고 변경·검증·차단 사항을 보고하도록 안내 |
+| 탐색 예산 | 중복 탐색을 줄이라는 소프트 지침. 도구 호출 차단이나 강제 단계 전환 없음 |
+| 출력 압축 | 전역 도구 결과를 가로채거나 압축하지 않음 |
+| 외부 상태 | 동적 작업 상태 파일·장기 기억 시스템을 추가하지 않음 |
+| 고정 입력 | 공통 MD를 고정 배포. CLI의 전체 시스템 프롬프트·도구 목록은 제어하지 않음 |
+| 서버 최적화 | `think=false`, temperature, KV 설정·포킹·CLI 간 KV 공유를 구현하지 않음 |
+
+고정 MD는 안정적인 입력 조건을 만들 수 있지만 실제 프롬프트 접두부는 CLI가 구성합니다.
+백엔드·CC Switch·GLM 연결이 캐시를 지원하고 실제 적중하는지는 별도로 확인해야 합니다.
+Claude와 Codex 사이의 캐시 공유나 자동 가속을 보장하지 않습니다. 벤치마크는 API/CLI가 반환한 경우에만
+`cache_read_input_tokens`·`cache_creation_input_tokens`를 기록합니다. 빈 칸은 알 수 없음이지 0이 아닙니다.
 
 참고 글: https://javaexpert.tistory.com/1704
-공식 규약: https://code.claude.com/docs/en/hooks
+원문 코드·성능 수치를 재현한 구현은 아닙니다. 최소 지침은 위 아이디어 중 자연어로 안내할 수 있는 범위만 사용합니다.
 
-이 패키지는 글의 아이디어를 Claude Code 공개 CLI/훅으로 적용한 별도 구현입니다.
-원문 프로젝트 코드를 복사하거나 원문의 수치를 재현한 것은 아닙니다.
-Windows 네이티브/ macOS / Linux, Python 3.10 이상과 기존에 로컬 모델에 연결된 Claude Code가 필요합니다.
-추가 Python 패키지나 jq는 필요 없습니다. Windows는 native claude.exe 또는 공식 npm 설치와 PowerShell을 사용합니다.
-WSL/Bash는 키트 실행의 필수 조건이 아닙니다. npm .cmd/.bat는 패키지 진입점을 셸 없이 직접 실행합니다.
-JS 진입점은 node.exe가 필요하고, EXE 진입점은 직접 실행합니다. 전역 설치와 node_modules/.bin을 지원합니다.
-사용자 정의 배치/PowerShell 래퍼의 추가 명령은 지원하지 않습니다. 매핑은 기존 Claude 설정/부모 환경변수로 유지하세요.
-`python quality-kit/launch.py --check`는 모델 호출 없이 선택한 command_prefix를 표시합니다.
-명령은 `python` 기준입니다. macOS/Linux에서 `python3`만 된다면 바꾸세요.
-Windows에서 `py`가 없어도 `python`이 동작하면 됩니다. `py` 설치는 필수가 아닙니다.
-macOS 자체 검사는 수행했지만 실제 Windows 모델 E2E는 아직 검증하지 않았습니다.
-모델 주소·인증·모델 이름은 기존 Claude Code 실행 환경을 그대로 사용합니다.
+## 5. 레거시 full: 명시적으로 선택하는 실험용 경로
 
-## 1. 빠른 검사 — 모델 호출 없음
+이전 훅·추가 프롬프트 방식은 실험 재현용으로 남아 있습니다. 기본 사용법으로 권장하지 않습니다.
+실제로 더 느린 실행과 타임아웃이 관찰되었으며, 효과나 정확한 비용 차이를 확정한 수치는 없습니다.
 
-저장소 루트에서 `python scripts/run_tests.py`를 실행하면 벤치마크와 키트를 함께 검사합니다.
-키트만 복사한 환경에서는 아래 [자체 코드 테스트](#자체-코드-테스트)를 사용하세요.
-모델 연결·인증 성공이나 품질 향상을 검사하는 명령은 아닙니다.
-A/B 시험 순서는 [저장소 빠른 테스트 가이드](../README.md#3-빠른-ab-한-문제만-비교)를 따르세요.
+```powershell
+# 레거시 프로필 확인: 모델 호출 없음
+python quality-kit/launch.py --legacy-full --check
 
-## 2. 내 프로젝트에서 사용
-
-1. 이 저장소의 `quality-kit/` 폴더를 대상 프로젝트 루트에 복사합니다.
-2. 대상 프로젝트 루트에서 설치 경로를 확인한 뒤 세션을 시작합니다.
-   `--check`는 모델을 호출하지 않고, 다음 `launch.py` 명령은 실제 Claude 세션을 시작합니다.
-
-```bash
-python quality-kit/launch.py --check
-python quality-kit/launch.py
+# 레거시 훅·추가 프롬프트로 Claude 세션 시작
+python quality-kit/launch.py --legacy-full
 ```
 
-기존 .claude/settings.json, CLAUDE.md, 모델 설정은 수정하지 않습니다.
-전용 실행기를 사용한 세션에만 이 키트의 설정과 고정 지침이 추가됩니다.
-실행 시 OS에 맞는 임시 훅 설정을 생성합니다. Windows는 PowerShell 명령을 사용하므로
-settings.json 템플릿을 Windows 프로젝트에 그대로 복사하지 말고 launch.py로 시작하세요.
-기존 설정의 훅도 남아 있으므로 앞서 만든 verify/gate를 동시에 사용하면 중복 검사가
-발생할 수 있습니다. 이 키트를 비교 시험할 때는 기존 훅과의 중복부터 확인하세요.
-훅 스크립트는 사용자 권한으로 실행되며 Claude의 개별 Bash 승인과 별개입니다.
-검사 명령은 신뢰하는 프로젝트에서만 등록하세요. 권한 우회 플래그는 사용하지 않습니다.
-키트 코드를 사용할 프로젝트의 Git 정책에 맞게 개인 폴더 제외 또는 별도 브랜치에서 관리하세요.
+기존 full 실험 구성을 가진 경우에만 사용하세요. 별도 프로젝트에서 이 경로를 재현하려면 레거시 키트의
+실행 경로·설정·검사 명령을 검토해야 합니다. 최소 MD 설치만으로 full 검증 게이트가 구성되지는 않습니다.
 
-## 3. 전체 테스트 게이트 켜기
+- full은 도구 사용 후 검증·탐색 카운터·Stop 테스트와 재시도 등을 추가합니다. 광범위한 훅은 지연과 중복 검사를 만들 수 있습니다.
+- Stop은 프로젝트 전체 완료 때만 발생하지 않습니다. 응답 종료에도 테스트가 실행될 수 있으며 실패 재시도도 총비용에 포함됩니다.
+- 기본 `test_commands`는 비어 있습니다. 별도 검사 명령을 등록하지 않으면 종료 테스트 게이트가 실행된 것으로 보지 마세요.
+- 훅은 사용자 권한으로 실행합니다. 신뢰하는 검사만 등록하세요. 기존 훅 중복·조직 정책·CLI 버전에 따른 동작을 확인해야 합니다.
+- PostToolUse 피드백은 이미 수행한 편집을 취소하지 않으며 재시도 상한에 도달하면 실패 상태로 종료할 수 있습니다. 릴리스 차단은 CI에서 별도로 하세요.
+- `compact_run.py`는 명시적으로 감싼 명령의 출력만 축약합니다. 전체 도구 결과 압축 기능이 아닙니다. 원본 로그에는 비밀이 있을 수 있습니다.
 
-프로젝트별 테스트 명령을 모르므로 기본 test_commands는 비어 있습니다.
-이 상태에서는 종료 시 '테스트 게이트 미실행' 안내가 나오며 통과로 간주하지 않습니다.
-실제로 프로젝트에서 쓰는 명령 하나를 등록하세요. 아래 예시를 전부 실행하지 마세요.
+벤치마크에서 full을 준비하려면 새 폴더와 조건을 명시하세요. 아래는 모델 호출 없는 준비 명령입니다.
 
-```bash
-# npm 프로젝트: scripts.test가 일회성 실행인지 확인
-python quality-kit/configure.py --test npm test
-
-# Python unittest 프로젝트 예시
-python quality-kit/configure.py --test python -m unittest discover -s tests
-
-# 별도 테스트 래퍼가 있는 프로젝트 예시
-python quality-kit/configure.py --test ./scripts/run_tests.sh
+```powershell
+python bench.py --runs ./runs/legacy-01 prepare --conditions baseline full --repeats 1
+python bench.py --runs ./runs/three-01 prepare --conditions baseline minimal full --repeats 1
 ```
 
-Windows의 npm/추가 도구 `.cmd`를 테스트 명령으로 직접 실행하는 것은 별도 지원 범위가 아닙니다.
-아래 npm·셸 스크립트 예시는 macOS/Linux 기준이며, Windows에서는 `python`이나 `node.exe`로
-직접 실행 가능한 프로젝트의 검토된 테스트 진입점을 등록하세요. Claude npm 설치 지원과는 별개입니다.
+기존 full 결과의 보고서는 계속 생성할 수 있습니다. minimal과 full은 서로 다른 실험 조건이며,
+지침이 바뀐 과거 실행을 같은 프롬프트의 대응 쌍으로 섞어 해석하지 마세요.
 
-명령은 셸 문자열이 아니라 인자 배열로 저장됩니다. &&, |, 리다이렉션 문법을 넣지 마세요.
-복합 명령은 프로젝트의 검토된 테스트 스크립트 하나로 묶어 등록하세요.
-watch 모드나 입력을 기다리는 명령은 사용하지 마세요.
-config.json은 키트 전체에 적용되므로 프로젝트마다 별도 키트 사본을 사용하세요.
-
-## 4. 추가 린터 연결
-
-config.json의 verify_by_suffix에 필요한 명령만 넣으세요. 도구는 사전 설치해야 합니다.
-키트가 자동으로 npx/pip 다운로드를 하지 않습니다.
-
-```json
-{
-  ".py": [["ruff", "check", "{file}"]],
-  ".ts": [["npx", "--no-install", "eslint", "{file}"]],
-  ".tsx": [["npx", "--no-install", "eslint", "{file}"]]
-}
-```
-
-이는 verify_by_suffix의 값 예시입니다. config.json 전체를 위 내용으로 덮어쓰지 마세요.
-JS, JSX 등은 필요한 확장자를 별도로 등록하세요.
-기본 검사는 Python 문법, JSON 파싱, Bash 문법이며 ESLint/타입 검사를 대신하지 않습니다.
-프로젝트 전체 타입 검사는 test_commands에 별도 인자 배열로 추가할 수 있습니다.
-각 기본 검사 제한은 20초, 각 테스트 명령은 90초입니다.
-추가 검사나 테스트가 많아지면 settings.json의 전체 훅 timeout도 함께 조절하세요.
-
-## 적용한 아이디어와 범위
-
-- 구조화 프롬프트: 목표/완료 조건/제약을 먼저 확인하고 Changed/Verified/Blocked로 보고.
-  자연어 지침이며 JSON 스키마 강제 기능은 아닙니다.
-- 로그 압축: compact_run.py를 사용한 명령만 앞/뒤 출력으로 축약하고 전체 로그를 별도 저장.
-  Claude의 기존 Read/Bash 출력 전체를 가로채거나 교체하지는 않습니다.
-- 단계 관리: 도구 호출 예산에 도달하면 중복 탐색을 멈추라는 추가 컨텍스트 제공.
-  호출 수는 탐색 전용이 아닌 전체 도구 기준입니다. 도구를 차단하지 않습니다.
-- 외부 상태: 짧은 작업 상태 파일 사용 지침 + 훅 카운터의 세션별 디스크 저장.
-  사용자 선호 장기 기억/자동 요약 시스템은 아닙니다.
-- 쓰기 검증: Write 이벤트의 요청 UTF-8 내용과 디스크 바이트 비교.
-  Edit는 파일 존재/문법만 확인하므로 변경 diff는 별도로 확인해야 합니다.
-  Bash를 통한 파일 변경은 자동 내용 비교를 하지 않습니다.
-- 고정 지침: 실행 시 고정 프롬프트를 추가하며 실행 도중 시스템 프롬프트/툴셋을 바꾸지 않음.
-  실제 서버 KV 캐시 사용이나 가속 효과를 보장하지는 않습니다.
-- 최종 검증: 변경 가능성이 있는 도구 사용 후, 종료 시 설정한 테스트를 실행.
-  실패하면 수정 요청으로 종료를 막되 상한 초과 시 FAILED 안내 후 종료 허용.
-
-think=false, temperature, KV cache forking, 지연 툴 로딩, 병렬 부팅은 구현하지 않았습니다.
-Claude Code의 .claude 설정만으로 모든 로컬 추론 서버의 이런 기능을 제어할 수 없고,
-도구를 동적으로 제거하면 코딩 작업의 검증과 캐시 재사용을 해칠 수 있기 때문입니다.
-'비용 0'은 이 키트의 보장이 아닙니다. 로컬 연산/전력/장비 비용은 존재합니다.
-
-## 로그 압축 도구 직접 사용
-
-프로젝트 루트에서:
-
-```bash
-python quality-kit/compact_run.py -- npm test
-```
-
-기본 120초 제한, 실제 명령 종료 코드 보존, 전체 로그 위치 출력.
-전체 로그는 TMPDIR의 개인 권한 파일에 저장됩니다. 로그에 비밀이 포함될 수 있으니
-공유하지 말고 필요가 끝나면 표시된 파일을 직접 삭제하세요. 대용량 로그는 디스크를
-소모할 수 있습니다. 중간 부분에 필요한 오류가 있으면 원문 로그를 추가로 확인하세요.
-이 도구 사용은 모델에 대한 지침이며 모든 명령에서 강제되지는 않습니다.
-
-## 적용 전/후 비교
-
-```bash
-# 이 키트만 추가하지 않는 기준 실행 (기존 Claude 설정은 유지됨)
-python quality-kit/launch.py --baseline
-
-# 적용 실행
-python quality-kit/launch.py
-```
-
-동일 모델/프롬프트/시작 코드/예산의 새 세션에서 반복 비교하세요.
-baseline은 전역/프로젝트 기존 훅까지 끄는 옵션이 아닙니다.
-최종 평가는 키트와 독립적인 테스트로 수행하고, 성공률과 총 시간을 비교하세요.
-이 키트는 현재 설치된 로컬 모델로 A/B 성능 측정까지 수행한 결과물이 아닙니다.
-
-## 자체 코드 테스트
-
-```bash
-cd quality-kit
-python -m unittest -v test_kit.py
-```
-
-이는 키트의 단위/서브프로세스 테스트이며 실제 Claude 모델의 품질 평가가 아닙니다.
-
-## 한계와 복구
-
-- 새 세션에서 /hooks로 등록 확인. --bare, --safe-mode 또는 조직 정책으로 훅이 꺼져 있으면 작동하지 않을 수 있음.
-- 검증 오류는 PostToolUse additionalContext로 피드백하며 이미 수행한 편집을 취소하지 않음.
-- 코드 편집 외의 Bash 실행도 보수적으로 변경 가능성으로 간주하므로 불필요한 테스트가 실행될 수 있음.
-- Stop은 '전체 프로젝트 완료'만이 아니라 모델 응답 종료 때도 발생함.
-- retry exhaustion은 실패 상태 그대로 종료 허용. 엄격한 릴리스 차단은 CI에서 별도로 수행.
-- 기존 훅/조직 설정과의 충돌, 실제 모델의 지침 준수는 각 환경에서 확인해야 함.
-- 임시 세션 상태는 TMPDIR/local-quality-kit에 저장. 원문 세션 ID는 해시 처리.
-- 키트 없이 평소처럼 claude를 실행하면 이 키트는 추가되지 않음. 프로젝트 설정 복구는 필요 없음.
-- 키트 폴더는 모델이 수정할 수 있는 위치일 수 있으므로 보안 경계가 아님.
-
-구현 코드는 원문 글의 성능 수치를 보증하지 않으며, Claude Code 내부 엔진 수정도 하지 않습니다.
+레거시 규약: https://code.claude.com/docs/en/hooks
+설치·실행 진단과 안전 범위는 [루트 README](../README.md)를 참고하세요.

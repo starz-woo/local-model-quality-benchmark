@@ -22,7 +22,10 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def prepare(runs, repeats, seed):
+def prepare(runs, repeats, seed, conditions=('baseline', 'minimal')):
+    conditions = tuple(conditions)
+    if not conditions or conditions[0] != 'baseline' or len(conditions) < 2 or len(set(conditions)) != len(conditions) or any(c not in ('baseline', 'minimal', 'full') for c in conditions):
+        raise ValueError('Choose baseline followed by minimal and/or full, without duplicates.')
     if repeats < 1:
         raise ValueError('repeats must be positive')
     if runs.exists() and any(runs.iterdir()):
@@ -32,7 +35,7 @@ def prepare(runs, repeats, seed):
     public_test_command = ['python' if IS_WINDOWS else 'python3', '-m', 'unittest', 'discover', '-s', 'tests', '-v']
     for task_id, task in TASKS.items():
         for repeat in range(1, repeats + 1):
-            for condition in ('baseline', 'full'):
+            for condition in conditions:
                 run_id = f'{task_id}-{condition}-r{repeat}'
                 directory = runs / run_id
                 workspace = directory / 'workspace'
@@ -40,6 +43,8 @@ def prepare(runs, repeats, seed):
                 (workspace / 'solution.py').write_text(task['starter'], encoding='utf-8', newline='\n')
                 (workspace / 'TASK.md').write_text(task['request'] + COMMON.replace('{public_test_command}', ' '.join(public_test_command)), encoding='utf-8', newline='\n')
                 (workspace / 'tests' / 'test_public.py').write_text(task['public'], encoding='utf-8', newline='\n')
+                if condition == 'minimal':
+                    shutil.copyfile(ROOT / 'minimal-kit' / 'INSTRUCTIONS.md', workspace / 'CLAUDE.md')
                 initial = {path.relative_to(workspace).as_posix(): digest(path.read_bytes()) for path in workspace.rglob('*') if path.is_file()}
                 settings = {'autoMemoryEnabled': False}
                 if condition == 'full':
@@ -56,7 +61,7 @@ def prepare(runs, repeats, seed):
                 write_json(directory / 'meta.json', {'run_id': run_id, 'task_id': task_id, 'condition': condition, 'repeat': repeat, 'initial_sha256': initial, 'allowed_test_command': public_test_command})
                 schedule.append(run_id)
     random.Random(seed).shuffle(schedule)
-    write_json(runs / 'manifest.json', {'seed': seed, 'repeats': repeats, 'schedule': schedule, 'note': 'Task fixtures and metadata only. No model performance has been measured.'})
+    write_json(runs / 'manifest.json', {'seed': seed, 'repeats': repeats, 'conditions': conditions, 'schedule': schedule, 'note': 'Task fixtures and metadata only. No model performance has been measured.'})
     print(json.dumps({'prepared_runs': len(schedule), 'runs': str(runs), 'model_calls': 0}, ensure_ascii=False))
 
 
@@ -119,6 +124,7 @@ def main():
     p = sub.add_parser('prepare')
     p.add_argument('--repeats', type=int, default=3)
     p.add_argument('--seed', type=int, default=17)
+    p.add_argument('--conditions', nargs='+', choices=('baseline', 'minimal', 'full'), default=['baseline', 'minimal'], help='Default: MD-only comparison; full is an opt-in legacy experiment')
     p = sub.add_parser('evaluate')
     p.add_argument('--id')
     sub.add_parser('report')
@@ -135,7 +141,7 @@ def main():
     args = parser.parse_args()
     try:
         if args.action == 'prepare':
-            prepare(args.runs.resolve(), args.repeats, args.seed)
+            prepare(args.runs.resolve(), args.repeats, args.seed, args.conditions)
         elif args.action == 'evaluate':
             for directory in selected(args.runs.resolve(), args.id):
                 evaluate(directory)
