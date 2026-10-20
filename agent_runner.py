@@ -45,7 +45,7 @@ def execute(directory, args, run_process, write_json):
     if (directory / 'execution.json').exists() or (directory / 'execution.started.json').exists():
         raise ValueError('Run was already started. Never reuse a modified workspace; prepare a new --runs directory.')
     workspace = directory / 'workspace'
-    command = [find_claude() or 'claude', '-p', (workspace / 'TASK.md').read_text(encoding='utf-8'), '--output-format', 'json', '--no-session-persistence', '--settings', str(directory / 'settings.json')]
+    command = ['claude', '-p', (workspace / 'TASK.md').read_text(encoding='utf-8'), '--output-format', 'json', '--no-session-persistence', '--settings', str(directory / 'settings.json')]
     env = utf8_environment()
     if args.model:
         command += ['--model', args.model]
@@ -72,8 +72,10 @@ def execute(directory, args, run_process, write_json):
         raise ValueError('Ancestor instructions detected. Use a clean ancestry or explicitly --allow-ancestor-instructions; inputs are recorded in dry run.')
     if config_dir:
         Path(config_dir).mkdir(exist_ok=True)
-    if not find_claude():
+    executable = find_claude()
+    if not executable:
         raise ValueError('claude executable not found')
+    command[0] = executable
     if args.timeout <= 0:
         raise ValueError('timeout must be positive')
     from integrity import inventory
