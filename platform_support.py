@@ -12,6 +12,7 @@ IS_WINDOWS = _runtime.IS_WINDOWS
 process_options = _runtime.process_options
 stop_process_tree = _runtime.stop_process_tree
 find_claude = _runtime.find_claude
+claude_command = _runtime.claude_command
 utf8_environment = _runtime.utf8_environment
 configure_stdio = _runtime.configure_stdio
 hook_settings = _runtime.hook_settings

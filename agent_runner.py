@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 from urllib.parse import urlparse
-from platform_support import find_claude, utf8_environment, workflow_prompt
+from platform_support import find_claude, claude_command, utf8_environment, workflow_prompt
 
 
 def validate_endpoint(value):
@@ -45,7 +45,7 @@ def execute(directory, args, run_process, write_json):
     if (directory / 'execution.json').exists() or (directory / 'execution.started.json').exists():
         raise ValueError('Run was already started. Never reuse a modified workspace; prepare a new --runs directory.')
     workspace = directory / 'workspace'
-    command = [find_claude() or 'claude', '-p', (workspace / 'TASK.md').read_text(encoding='utf-8'), '--output-format', 'json', '--no-session-persistence', '--settings', str(directory / 'settings.json')]
+    command = ['claude', '-p', (workspace / 'TASK.md').read_text(encoding='utf-8'), '--output-format', 'json', '--no-session-persistence', '--settings', str(directory / 'settings.json')]
     env = utf8_environment()
     if args.model:
         command += ['--model', args.model]
@@ -72,15 +72,18 @@ def execute(directory, args, run_process, write_json):
         raise ValueError('Ancestor instructions detected. Use a clean ancestry or explicitly --allow-ancestor-instructions; inputs are recorded in dry run.')
     if config_dir:
         Path(config_dir).mkdir(exist_ok=True)
-    if not find_claude():
+    executable = find_claude()
+    if not executable:
         raise ValueError('claude executable not found')
+    prefix = claude_command(executable)
+    command = prefix + command[1:]
     if args.timeout <= 0:
         raise ValueError('timeout must be positive')
     from integrity import inventory
     if inventory(workspace) != meta['initial_sha256']:
         raise ValueError('Workspace is not pristine (changed, missing or extra files). Prepare a new run.')
     try:
-        version = subprocess.run([command[0], '--version'], capture_output=True, text=True, timeout=10).stdout.strip()
+        version = subprocess.run(prefix + ['--version'], env=env, capture_output=True, text=True, encoding='utf-8', timeout=10).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         version = 'unavailable'
     audit = {'run_id': meta['run_id'], 'model': args.model, 'model_notes': args.model_notes, 'base_url': args.base_url, 'claude_version': version, 'timeout_seconds': args.timeout, 'settings_sha256': hashlib.sha256((directory / 'settings.json').read_bytes()).hexdigest(), 'mode': 'real_agent_invocation', 'instruction_inputs': instruction_inputs, 'isolated_config_dir': config_dir, 'model_connection': 'inherited' if args.inherit_cli_config else 'isolated', 'usage': {}, 'response': ''}

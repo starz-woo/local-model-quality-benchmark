@@ -78,14 +78,48 @@ def stop_process_tree(process):
 
 
 def find_claude():
-    if IS_WINDOWS:
-        executable = shutil.which('claude.exe')
-        if executable:
-            return executable
-    executable = shutil.which('claude')
-    if IS_WINDOWS and executable and Path(executable).suffix.lower() in ('.cmd', '.bat'):
-        raise ValueError('Install native Claude Code (claude.exe); npm .cmd/.bat shims are not supported by this shell-free launcher.')
-    return executable
+    # Honor PATH order: a later native install must not replace the active npm CLI.
+    return shutil.which('claude') or (shutil.which('claude.exe') if IS_WINDOWS else None)
+
+
+def claude_command(executable):
+    """Resolve standard npm Windows shims without passing user arguments to CMD."""
+    if not executable:
+        raise ValueError('Claude Code not found on PATH')
+    shim = Path(executable)
+    if not IS_WINDOWS or shim.suffix.lower() not in ('.cmd', '.bat'):
+        return [str(executable)]
+    local_bin = shim.parent.name.lower() == '.bin'
+    modules = shim.parent.parent if local_bin else shim.parent / 'node_modules'
+    package = modules / '@anthropic-ai' / 'claude-code'
+    try:
+        manifest = json.loads((package / 'package.json').read_text(encoding='utf-8'))
+        entry = manifest['bin']
+        entry = entry['claude'] if isinstance(entry, dict) else entry
+        if manifest.get('name') != '@anthropic-ai/claude-code' or not isinstance(entry, str):
+            raise ValueError('not the official Claude Code package')
+        relative = Path(entry.replace('\\', '/')).as_posix()
+        target = (package / relative).resolve()
+        target.relative_to(package.resolve())
+        shim_text = shim.read_text(encoding='utf-8-sig').replace('\\', '/').lower()
+        expected = ('../' if local_bin else 'node_modules/') + '@anthropic-ai/claude-code/' + relative.lower()
+        if expected not in shim_text or '%*' not in shim_text:
+            raise ValueError('not a recognized npm shim')
+        if not target.is_file():
+            raise ValueError('npm entry point is missing')
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise ValueError(f'Cannot resolve npm Claude shim {shim}: {exc}. Repair the npm installation or use native Claude Code; custom batch wrappers are not supported.') from exc
+    if target.suffix.lower() == '.exe':
+        return [str(target)]
+    if target.suffix.lower() not in ('.js', '.cjs', '.mjs'):
+        raise ValueError(f'Unsupported npm Claude entry point: {target}')
+    adjacent_node = shim.parent / 'node.exe'
+    node = str(adjacent_node) if adjacent_node.is_file() else shutil.which('node.exe')
+    if not node:
+        raise ValueError('Node.js (node.exe) is required for this npm Claude installation; install Node.js or repair PATH.')
+    if Path(node).suffix.lower() in ('.cmd', '.bat'):
+        raise ValueError('Node.js must resolve to node.exe, not a batch wrapper')
+    return [str(node), str(target)]
 
 
 def utf8_environment(env=None):

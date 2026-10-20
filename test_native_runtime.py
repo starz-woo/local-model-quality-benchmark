@@ -112,5 +112,118 @@ for _ in range(5):
                 self.assertEqual(lock.stat().st_size, 0, 'lock files must not require a pre-lock sentinel write')
 
 
+    def test_dry_run_never_requires_a_claude_installation(self):
+        import argparse
+        import contextlib
+        import io
+        from unittest.mock import patch
+        import agent_runner
+        import bench
+        with tempfile.TemporaryDirectory() as directory:
+            runs = Path(directory)
+            with contextlib.redirect_stdout(io.StringIO()):
+                bench.prepare(runs, 1, 17)
+            args = argparse.Namespace(base_url=None, model=None, inherit_cli_config=True, execute=False)
+            output = io.StringIO()
+            with patch.object(agent_runner, 'find_claude', side_effect=ValueError('only npm claude.cmd exists')) as locate, contextlib.redirect_stdout(output):
+                agent_runner.execute(runs / 'dedupe-baseline-r1', args, bench.run_process, bench.write_json)
+            self.assertFalse(locate.called, 'dry run must not validate actual Claude installations')
+            self.assertIn('dry_run', output.getvalue())
+            self.assertFalse((runs / 'dedupe-baseline-r1' / 'execution.json').exists())
+            # Real execution must still validate the installation, not silently
+            # try to run the unsupported shim after bypassing the dry-run check.
+            args.execute = True
+            args.allow_ancestor_instructions = True
+            with patch.object(agent_runner, 'find_claude', side_effect=ValueError('only npm claude.cmd exists')) as locate:
+                with self.assertRaisesRegex(ValueError, 'only npm claude.cmd'):
+                    agent_runner.execute(runs / 'dedupe-baseline-r1', args, bench.run_process, bench.write_json)
+            self.assertEqual(locate.call_count, 1)
+
+
+class NpmLaunchTests(unittest.TestCase):
+    def test_windows_npm_entrypoints_are_shell_free(self):
+        import json
+        from unittest.mock import patch
+        from platform_support import _runtime as runtime
+        with tempfile.TemporaryDirectory(prefix='npm path 한글 & ') as directory:
+            root = Path(directory)
+            shim = root / 'claude.cmd'
+            package = root / 'node_modules' / '@anthropic-ai' / 'claude-code'
+            package.mkdir(parents=True)
+            node = root / 'node.exe'
+            node.touch()
+            for entry in ('cli.js', 'bin/claude.exe'):
+                with self.subTest(entry=entry):
+                    target = package / entry
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.touch()
+                    (package / 'package.json').write_text(json.dumps({'name': '@anthropic-ai/claude-code', 'bin': {'claude': entry}}), encoding='utf-8')
+                    shim.write_text('@"%~dp0\\node_modules\\@anthropic-ai\\claude-code\\' + entry.replace('/', '\\') + '" %*', encoding='utf-8')
+                    with patch.object(runtime, 'IS_WINDOWS', True), patch.object(runtime.shutil, 'which', return_value=str(shim)):
+                        self.assertEqual(runtime.find_claude(), str(shim))
+                        expected = [str(node), str(target)] if entry.endswith('.js') else [str(target)]
+                        self.assertEqual(runtime.claude_command(str(shim)), expected)
+
+    def test_benchmark_preserves_npm_prefix_and_inherited_environment(self):
+        import argparse
+        import contextlib
+        import io
+        import json
+        import os
+        from unittest.mock import patch
+        import agent_runner
+        import bench
+        with tempfile.TemporaryDirectory() as directory:
+            runs = Path(directory)
+            with contextlib.redirect_stdout(io.StringIO()):
+                bench.prepare(runs, 1, 17)
+            args = argparse.Namespace(base_url=None, model=None, inherit_cli_config=True, execute=True, allow_ancestor_instructions=True, timeout=30, model_notes='unit fixture')
+            prefix = ['C:/Program Files/node.exe', 'C:/npm path/cli.js']
+            def fixture_run(command, workspace, output, timeout, env):
+                self.assertEqual(command[:2], prefix)
+                self.assertEqual(command[2], '-p')
+                self.assertNotIn('--model', command)
+                self.assertEqual(env['ANTHROPIC_BASE_URL'], 'http://127.0.0.1:19999')
+                output.write_text(json.dumps({'type': 'result', 'result': 'unit fixture'}), encoding='utf-8')
+                return {'exit_code': 0, 'timed_out': False, 'seconds': 0}
+            with patch.object(agent_runner, 'find_claude', return_value='C:/npm/claude.cmd'), patch.object(agent_runner, 'claude_command', return_value=prefix, create=True), patch.object(agent_runner.subprocess, 'run') as version, patch.dict(os.environ, {'ANTHROPIC_BASE_URL': 'http://127.0.0.1:19999'}), contextlib.redirect_stdout(io.StringIO()):
+                version.return_value.stdout = 'fixture-version'
+                agent_runner.execute(runs / 'dedupe-baseline-r1', args, fixture_run, bench.write_json)
+                self.assertEqual(version.call_args.args[0], prefix + ['--version'])
+
+    def test_local_npm_bin_and_dot_relative_entry(self):
+        import json
+        from unittest.mock import patch
+        from platform_support import _runtime as runtime
+        with tempfile.TemporaryDirectory() as directory:
+            modules = Path(directory) / 'node_modules'
+            package = modules / '@anthropic-ai' / 'claude-code'
+            package.mkdir(parents=True)
+            (package / 'package.json').write_text(json.dumps({'name': '@anthropic-ai/claude-code', 'bin': './cli.js'}), encoding='utf-8')
+            target = package / 'cli.js'
+            target.touch()
+            shim = modules / '.bin' / 'claude.cmd'
+            shim.parent.mkdir()
+            shim.write_text('@"%~dp0\\..\\@anthropic-ai\\claude-code\\cli.js" %*', encoding='utf-8')
+            with patch.object(runtime, 'IS_WINDOWS', True), patch.object(runtime.shutil, 'which', return_value='C:/Node/node.exe'):
+                self.assertEqual(runtime.claude_command(str(shim)), ['C:/Node/node.exe', str(target.resolve())])
+
+    def test_npm_missing_node_is_actionable(self):
+        import json
+        from unittest.mock import patch
+        from platform_support import _runtime as runtime
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = root / 'node_modules' / '@anthropic-ai' / 'claude-code'
+            package.mkdir(parents=True)
+            (package / 'package.json').write_text(json.dumps({'name': '@anthropic-ai/claude-code', 'bin': {'claude': 'cli.js'}}), encoding='utf-8')
+            (package / 'cli.js').touch()
+            shim = root / 'claude.cmd'
+            shim.write_text('@"%~dp0\\node_modules\\@anthropic-ai\\claude-code\\cli.js" %*', encoding='utf-8')
+            with patch.object(runtime, 'IS_WINDOWS', True), patch.object(runtime.shutil, 'which', return_value=None):
+                with self.assertRaisesRegex(ValueError, 'Node.js'):
+                    runtime.claude_command(str(shim))
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

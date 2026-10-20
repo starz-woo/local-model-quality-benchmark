@@ -141,6 +141,16 @@ class QualityTests(unittest.TestCase):
         self.assertTrue(execute.called)
         self.assertEqual(execute.call_args.args[0], ['/fake/claude'])
 
+    def test_launcher_keeps_npm_command_prefix(self):
+        import launch
+        prefix = ['C:/Program Files/node.exe', 'C:/npm 한글 & dir/cli.js']
+        for flags in ([], ['--baseline']):
+            with self.subTest(flags=flags), patch.object(sys, 'argv', ['launch.py'] + flags + ['-p', '한글 " & %PATH% ! ^ | >']), patch.object(launch, 'find_claude', return_value='C:/npm/claude.cmd'), patch.object(launch, 'claude_command', return_value=prefix, create=True), patch('subprocess.call', return_value=7) as execute:
+                self.assertEqual(launch.main(), 7)
+                self.assertEqual(execute.call_args.args[0][:2], prefix)
+                self.assertEqual(execute.call_args.args[0][-2:], ['-p', '한글 " & %PATH% ! ^ | >'])
+                self.assertFalse(execute.call_args.kwargs.get('shell', False))
+
     def test_compact_preserves_ends(self):
         output = hook.compact('START' + 'x' * 10000 + 'END')
         self.assertTrue(output.startswith('START'))
