@@ -1,5 +1,10 @@
 # 로컬 모델용 최소 지침 + A/B 벤치마크
 
+> **실제 Wiki agent vs 실제 OpenCode를 Windows에서 직접 테스트:**
+> [실행 스크립트·설치·명령](docs/wiki-vs-opencode.md). `python wiki_benchmark.py`는
+> 모델 호출 없는 preflight이며 실제 실행에는 `--execute`가 필요합니다.
+> 이 별도 runner는 Python 추가 패키지와 OpenCode 1.2.27이 필요합니다.
+
 기존 Claude Code·Codex에서 읽는 프로젝트 지침 파일에 짧은 공통 지침을 설치합니다.
 기본 방식은 **MD 파일만 배포**하는 것입니다. 별도 에이전트, 자동 검증 훅, 모델 연결 설정을 추가하지 않습니다.
 Claude Code용 벤치마크로 추가 공통 지침이 없는 `baseline`과 최소 지침만 추가한 `minimal`을 비교할 수 있습니다.
