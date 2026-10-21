@@ -15,7 +15,7 @@ class BenchmarkTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             runs = Path(directory)
             a = runs / 'dedupe-baseline-r1' / 'workspace'
-            b = runs / 'dedupe-full-r1' / 'workspace'
+            b = runs / 'dedupe-minimal-r1' / 'workspace'
             self.assertEqual((a / 'solution.py').read_bytes(), (b / 'solution.py').read_bytes())
             self.assertEqual((a / 'TASK.md').read_bytes(), (b / 'TASK.md').read_bytes())
             self.assertFalse((a / 'grader.py').exists())
@@ -32,7 +32,7 @@ class BenchmarkTests(unittest.TestCase):
             import io
             with redirect_stdout(io.StringIO()):
                 bench.prepare(runs, 1, 17)
-            for condition in ('baseline', 'full'):
+            for condition in ('baseline', 'minimal'):
                 run = runs / f'dedupe-{condition}-r1'
                 meta = json.loads((run / 'meta.json').read_text(encoding='utf-8'))
                 command = meta['allowed_test_command']
@@ -44,7 +44,7 @@ class BenchmarkTests(unittest.TestCase):
                 rules = argv[argv.index('--allowedTools') + 1]
                 self.assertIn('Bash(' + ' '.join(command[:3]) + ' *)', rules)
                 self.assertNotIn('--dangerously-skip-permissions', argv)
-            self.assertEqual((runs / 'dedupe-baseline-r1/workspace/TASK.md').read_bytes(), (runs / 'dedupe-full-r1/workspace/TASK.md').read_bytes())
+            self.assertEqual((runs / 'dedupe-baseline-r1/workspace/TASK.md').read_bytes(), (runs / 'dedupe-minimal-r1/workspace/TASK.md').read_bytes())
 
     def test_grader_rejects_starters_and_accepts_references(self):
         from tasks import TASKS
@@ -89,7 +89,7 @@ class BenchmarkTests(unittest.TestCase):
             result = subprocess.run(command + ['report'], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             summary = json.loads((Path(directory) / 'summary.json').read_text(encoding='utf-8'))
-            for condition in ('baseline', 'full'):
+            for condition in ('baseline', 'minimal'):
                 self.assertEqual(summary['conditions'][condition]['attempted'], 0)
                 self.assertIsNone(summary['conditions'][condition]['success_rate'])
             self.assertEqual(summary['paired']['complete_pairs'], 0)
@@ -185,7 +185,7 @@ class BenchmarkTests(unittest.TestCase):
                 writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
                 writer.writeheader()
                 writer.writerows(rows)
-            (root / 'dedupe-full-r1' / 'execution.json').write_text(json.dumps(fixture), encoding='utf-8', newline='\n')
+            (root / 'dedupe-minimal-r1' / 'execution.json').write_text(json.dumps(fixture), encoding='utf-8', newline='\n')
             subprocess.run(command + ['report'], check=True, capture_output=True)
             with score_path.open() as stream:
                 added = list(csv.DictReader(stream))

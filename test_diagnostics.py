@@ -93,7 +93,12 @@ class DiagnosticTests(unittest.TestCase):
                 with self.assertRaises(KeyboardInterrupt):
                     run_stream_process([sys.executable, '-c', 'import time; time.sleep(30)'], Path(directory), output, 5)
             self.assertEqual(stop.call_count, 1)
-            self.assertIsNotNone(stop.call_args.args[0].poll())
+            process = stop.call_args.args[0]
+            # Queue.get is interrupted on every call in this fixture, including
+            # final draining; release the captured pipe before mock teardown.
+            if process.stdout is not None:
+                process.stdout.close()
+            self.assertIsNotNone(process.poll())
 
     def test_diagnostic_dry_run_builds_stream_flags_without_model_calls(self):
         with tempfile.TemporaryDirectory() as directory:
