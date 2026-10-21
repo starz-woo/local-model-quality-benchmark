@@ -3,7 +3,7 @@
 `agent.py`는 사용자가 제공한 Python 소스를 수정하지 않고 추가한 파일입니다.
 Claude Code나 Codex CLI를 실행하는 래퍼가 아니라 OpenAI 호환 API를 직접 호출하는 별도 에이전트입니다.
 기존 `bench.py`·`agent_runner.py`와 연결되지 않으며, 이 파일을 추가해도 기존 실행 경로는 바뀌지 않습니다.
-MD-only 지침 배포 변경(PR #8)과도 별개입니다.
+MD-only 지침 배포와 같은 PR에 포함되어도 실행 경로는 서로 독립적입니다.
 
 ## 실행 전 확인
 
