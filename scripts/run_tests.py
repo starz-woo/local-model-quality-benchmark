@@ -14,7 +14,7 @@ def main():
     env.update(PYTHONUTF8='1', PYTHONIOENCODING='utf-8', PYTHONDONTWRITEBYTECODE='1', TMPDIR=str(temporary), TMP=str(temporary), TEMP=str(temporary))
     commands = [
         (root, ['test_benchmark.py', 'test_native_runtime.py', 'test_diagnostics.py', 'test_minimal.py']),
-        (root, ['test_agent.py']),
+        (root, ['test_agent.py', 'test_custom_vs_claude.py']),
         (root / 'quality-kit', ['test_kit.py']),
     ]
     for cwd, tests in commands:
