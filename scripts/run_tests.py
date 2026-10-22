@@ -16,6 +16,7 @@ def main():
         (root, ['test_benchmark.py', 'test_native_runtime.py', 'test_diagnostics.py', 'test_minimal.py']),
         (root, ['test_agent.py', 'test_custom_vs_claude.py']),
         (root / 'quality-kit', ['test_kit.py']),
+        (root / 'claude-timing', ['test_bench.py']),
     ]
     for cwd, tests in commands:
         result = subprocess.run([sys.executable, '-m', 'unittest', '-v'] + tests, cwd=cwd, env=env)

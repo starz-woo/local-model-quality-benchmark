@@ -11,3 +11,4 @@ runs/
 *.log
 .local-quality-task.md
 config.json.before-test-setup
+claude-timing/results/
