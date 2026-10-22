@@ -1,5 +1,11 @@
 # 로컬 모델용 최소 지침 + A/B 벤치마크
 
+> **Claude Code 기본/경량 시스템 프롬프트의 실제 시간 비교:**
+> [측정 번들과 Windows 실행 안내](claude-timing/README.md).
+> 저장소 루트에서 `python claude-timing/bench.py --repo "C:/work/my-project" --model glm-5.3-flash --pairs 1 --run`으로 실행합니다.
+> `--run`부터 실제 모델을 호출합니다. 기존 모델 매핑을 유지하려면 `--model`을 생략하세요.
+> 읽기 전용 과제의 시간·토큰·도구 호출을 CSV로 기록하며, 기존 품질 벤치마크와는 별개입니다.
+
 기존 Claude Code·Codex에서 읽는 프로젝트 지침 파일에 짧은 공통 지침을 설치합니다.
 기본 방식은 **MD 파일만 배포**하는 것입니다. 별도 에이전트, 자동 검증 훅, 모델 연결 설정을 추가하지 않습니다.
 Claude Code용 벤치마크로 추가 공통 지침이 없는 `baseline`과 최소 지침만 추가한 `minimal`을 비교할 수 있습니다.
